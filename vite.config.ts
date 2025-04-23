@@ -1,8 +1,17 @@
-import { defineConfig } from 'vite';
+import {defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    tailwindcss(), // This is not needed as we are using the tailwindcss plugin in the postcss.config.js file
+  ],
+  resolve: {
+    alias: {
+      '@': '/src'
+    }
+  },
   build: {
     outDir: 'dist',
     rollupOptions: {
