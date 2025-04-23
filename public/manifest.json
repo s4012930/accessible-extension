@@ -1,0 +1,26 @@
+{
+    "manifest_version": 3,
+    "name": "Accessibility Enhancer",
+    "short_name": "AccEnhancer",
+    "description": "Adds high-contrast, dyslexia fonts, and AI alt-text to any site.",
+    "version": "0.1.0",
+  
+    "action": {
+      "default_popup": "popup.html"
+    },
+  
+    "background": {
+      "service_worker": "background.js"
+    },
+  
+    "permissions": [
+      "storage",
+      "activeTab",
+      "scripting"
+    ],
+  
+    "host_permissions": [
+      "<all_urls>"
+    ]
+  }
+  
