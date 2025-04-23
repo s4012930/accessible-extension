@@ -39,7 +39,7 @@ export default function Popup() {
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        Toggles are visual only right now; functionality comes next sprint.
+        Toggles do nothing at the moment.
       </p>
     </main>
   );
