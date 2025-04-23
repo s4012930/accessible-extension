@@ -1,1 +1,1 @@
-# accessible-web-feature-showcase
+# accessible-extension
