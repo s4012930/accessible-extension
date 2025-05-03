@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   plugins: [
     react(),
-    tailwindcss(), // This is not needed as we are using the tailwindcss plugin in the postcss.config.js file
+    tailwindcss(),
   ],
   resolve: {
     alias: {
@@ -17,12 +17,19 @@ export default defineConfig({
     rollupOptions: {
       input: {
         background: 'src/background.ts',
-        popup: 'popup.html'
+        popup: 'popup.html',
+        'content-script': 'src/content/content-script.ts',
+        'high-contrast': 'src/content/high-contrast.css',
       },
       output: {
         entryFileNames: '[name].js',
         chunkFileNames: '[name].js',
-        assetFileNames: '[name].[ext]'
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name?.endsWith('.css')) {
+            return '[name][extname]';
+          }
+          return '[name].[ext]';
+        }
       }
     }
   }
