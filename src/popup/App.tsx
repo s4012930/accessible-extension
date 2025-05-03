@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
-import { Contrast, Type, Keyboard, Video, BookA, } from 'lucide-react';
+import { Contrast, Type, Keyboard, Video, BookA } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
+import { useTheme } from 'next-themes';
 
 interface AccessibilityState {
   highContrast: boolean;
@@ -11,7 +12,7 @@ interface AccessibilityState {
 }
 
 export default function Popup() {
-    
+  const { setTheme } = useTheme();
   const [vision, setVision] = useState(false);
   const [dyslexia, setDyslexia] = useState(false);
   const [motor, setMotor] = useState(false);
@@ -23,12 +24,17 @@ export default function Popup() {
     chrome.runtime.sendMessage({ action: "getState" }, (response: AccessibilityState) => {
       if (response) {
         setVision(response.highContrast);
+        // Also set theme based on high contrast setting
+        setTheme(response.highContrast ? 'dark' : 'light');
       }
     });
-  }, []);
+  }, [setTheme]);
 
   const handleVision = (checked: boolean) => {
     setVision(checked);
+    
+    // Also set the popup theme to match high contrast setting
+    setTheme(checked ? 'dark' : 'light');
     
     // Send message to background script
     chrome.runtime.sendMessage({ 
@@ -42,6 +48,7 @@ export default function Popup() {
         toast.error('Failed to toggle High Contrast mode');
         // Revert UI state if operation failed
         setVision(!checked);
+        setTheme(!checked ? 'dark' : 'light');
       }
     });
   };
