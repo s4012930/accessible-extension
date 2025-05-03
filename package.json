@@ -7,45 +7,28 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-<<<<<<< Updated upstream
-    "preview": "vite preview"
-=======
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "coverage": "vitest run --coverage"
->>>>>>> Stashed changes
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.0",
     "@radix-ui/react-switch": "^1.2.2",
     "@tailwindcss/vite": "^4.1.4",
     "class-variance-authority": "^0.7.1",
-<<<<<<< Updated upstream
-    "clsx": "^2.1.1",
-=======
->>>>>>> Stashed changes
     "lucide-react": "^0.503.0",
     "next-themes": "^0.4.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sonner": "^2.0.3",
-<<<<<<< Updated upstream
-    "tailwind-merge": "^3.2.0",
-=======
->>>>>>> Stashed changes
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.2.8"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",
     "@tailwindcss/postcss": "^4.1.4",
-<<<<<<< Updated upstream
-    "@types/react": "^19.0.10",
-    "@types/react-dom": "^19.0.4",
-    "@vitejs/plugin-react": "^4.3.4",
-=======
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@types/chrome": "^0.0.316",
@@ -54,19 +37,10 @@
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "clsx": "^2.1.1",
->>>>>>> Stashed changes
     "eslint": "^9.22.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
-<<<<<<< Updated upstream
-    "postcss": "^8.5.3",
-    "shadcn-ui": "^0.9.5",
-    "tailwindcss": "^4.1.4",
-    "typescript": "~5.7.2",
-    "typescript-eslint": "^8.26.1",
-    "vite": "^6.3.1"
-=======
     "jsdom": "^26.1.0",
     "postcss": "^8.5.3",
     "shadcn-ui": "^0.9.5",
@@ -76,6 +50,5 @@
     "typescript-eslint": "^8.26.1",
     "vite": "^6.3.1",
     "vitest": "latest"
->>>>>>> Stashed changes
   }
 }
