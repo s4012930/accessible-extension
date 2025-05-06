@@ -10,6 +10,10 @@ import { vi } from 'vitest';
     }
   },
   runtime: {
-    sendMessage: vi.fn()
+    sendMessage: vi.fn(),
+    onMessage: {
+      addListener: vi.fn(),
+      removeListener: vi.fn()
+    }
   }
 } as unknown as typeof chrome;

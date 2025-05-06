@@ -1,9 +1,9 @@
 {
     "manifest_version": 3,
-    "name": "Accessibility Enhancer",
-    "short_name": "AccEnhancer",
-    "description": "Adds high-contrast, dyslexia fonts, and AI alt-text to any site.",
-    "version": "0.1.0",
+    "name": "Accessibility Booster",
+    "short_name": "AccBooster",
+    "description": "Adds Accessibility features to any website.",
+    "version": "0.4.0",
   
     "action": {
       "default_popup": "popup.html"
@@ -23,7 +23,7 @@
 
     "web_accessible_resources": [
       {
-        "resources": ["high-contrast.css"],
+        "resources": ["high-contrast.css", "dyslexic.css", "reading-line.css", "fonts/*"],
         "matches": ["<all_urls>"]
       }
     ],

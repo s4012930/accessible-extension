@@ -20,6 +20,8 @@ export default defineConfig({
         popup: 'popup.html',
         'content-script': 'src/content/content-script.ts',
         'high-contrast': 'src/content/high-contrast.css',
+        'dyslexic': 'src/content/dyslexic.css',
+        'reading-line': 'src/content/reading-line.css',
       },
       output: {
         entryFileNames: '[name].js',

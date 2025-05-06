@@ -1,0 +1,27 @@
+/* Reading line styles */
+.accessibility-reading-line-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2147483647; /* Highest z-index to ensure it's always on top */
+}
+
+.accessibility-reading-line {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: rgba(0, 122, 255, 0.7); /* Semi-transparent blue */
+  box-shadow: 0px 0px 4px 2px rgba(0, 122, 255, 0.5);
+  pointer-events: none;
+  transition: top 0.05s ease;
+}
+
+/* Dark mode variant - more visible blue in dark backgrounds */
+.accessibility-reading-line.dark-mode {
+  background-color: rgba(0, 153, 255, 0.8); /* Slightly brighter blue for dark mode */
+  box-shadow: 0px 0px 5px 2px rgba(0, 153, 255, 0.6);
+}

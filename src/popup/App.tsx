@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
+import { CollapsibleSlider } from '@/components/ui/collapsible-slider';
 import { Contrast, Type, Keyboard, Video, BookA, Eye, MousePointer, Brain, Sun, Moon, TextSelect, RulerIcon, AlignJustify, MousePointerClick, MousePointer2, StickyNote, MousePointerSquareDashed, LayoutDashboard, Focus, MoveHorizontal } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
@@ -11,7 +12,16 @@ const FEATURE_TOAST_ID = 'feature-toggle';
 
 interface AccessibilityState {
   highContrast: boolean;
-  // Add other features as needed
+  dyslexiaFont: boolean;
+  readingLine: boolean;
+  textScaling?: {
+    enabled: boolean;
+    value: number;
+  };
+  lineHeight?: {
+    enabled: boolean;
+    value: number;
+  };
 }
 
 export default function Popup() {
@@ -22,9 +32,13 @@ export default function Popup() {
   const [vision, setVision] = useState(false);
   const [dyslexia, setDyslexia] = useState(false);
   const [motion, setMotion] = useState(false);
-  const [textScaling, setTextScaling] = useState(false);
-  const [readingGuide, setReadingGuide] = useState(false);
-  const [lineHeight, setLineHeight] = useState(false);
+  const [textScaling, setTextScaling] = useState({ enabled: false, value: 100 });
+  const [readingLine, setReadingLine] = useState(false);
+  const [lineHeight, setLineHeight] = useState({ enabled: false, value: 1.5 });
+  
+  // Separate throttling flags for each slider to prevent race conditions
+  const [isTextScalingUpdating, setIsTextScalingUpdating] = useState(false);
+  const [isLineHeightUpdating, setIsLineHeightUpdating] = useState(false);
   
   // Motor features
   const [motor, setMotor] = useState(false);
@@ -42,10 +56,29 @@ export default function Popup() {
   
   // Load saved state when popup opens
   useEffect(() => {
+    // Set up message listener to catch state updates from background script
+    const messageListener = (request: any) => {
+      if (request.action === "stateUpdated" && request.state) {
+        const updatedState = request.state;
+        setVision(updatedState.highContrast);
+        setDyslexia(updatedState.dyslexiaFont);
+        setReadingLine(updatedState.readingLine || false);
+        setTextScaling(updatedState.textScaling || { enabled: false, value: 100 });
+        setLineHeight(updatedState.lineHeight || { enabled: false, value: 1.5 });
+      }
+      return true;
+    };
+    
+    chrome.runtime.onMessage.addListener(messageListener);
+    
+    // Get initial state
     chrome.runtime.sendMessage({ action: "getState" }, (response: AccessibilityState) => {
       if (response) {
         setVision(response.highContrast);
-        // Don't set theme based on high contrast here
+        setDyslexia(response.dyslexiaFont);
+        setReadingLine(response.readingLine || false);
+        setTextScaling(response.textScaling || { enabled: false, value: 100 });
+        setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
       }
     });
     
@@ -54,6 +87,10 @@ export default function Popup() {
     setTheme(savedTheme);
     setDarkMode(savedTheme === 'dark');
     
+    // Clean up listener when component unmounts
+    return () => {
+      chrome.runtime.onMessage.removeListener(messageListener);
+    };
   }, [setTheme]); // Remove theme dependency to prevent re-renders
 
   const toggleDarkMode = () => {
@@ -96,6 +133,17 @@ export default function Popup() {
         toast.success(`High Contrast mode ${checked ? 'enabled' : 'disabled'}!`, {
           id: FEATURE_TOAST_ID
         });
+        
+        // Get updated state to ensure UI stays in sync with actual state
+        chrome.runtime.sendMessage({ action: "getState" }, (response: AccessibilityState) => {
+          if (response) {
+            setVision(response.highContrast);
+            setDyslexia(response.dyslexiaFont);
+            setReadingLine(response.readingLine || false);
+            setTextScaling(response.textScaling || { enabled: false, value: 100 });
+            setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
+          }
+        });
       } else {
         toast.error('Failed to toggle High Contrast mode', {
           id: FEATURE_TOAST_ID
@@ -117,6 +165,144 @@ export default function Popup() {
       }
     });
   };
+
+  const handleDyslexia = (checked: boolean) => {
+    setDyslexia(checked);
+    
+    // Send message to background script
+    chrome.runtime.sendMessage({ 
+      action: "toggleFeature", 
+      feature: "dyslexiaFont", 
+      enabled: checked 
+    }, (response) => {
+      if (response && response.status === "success") {
+        toast.success(`Dyslexia Font ${checked ? 'enabled' : 'disabled'}!`, {
+          id: FEATURE_TOAST_ID
+        });
+        
+        // Get updated state to ensure UI stays in sync with actual state
+        chrome.runtime.sendMessage({ action: "getState" }, (response: AccessibilityState) => {
+          if (response) {
+            setVision(response.highContrast);
+            setDyslexia(response.dyslexiaFont);
+            setReadingLine(response.readingLine || false);
+            setTextScaling(response.textScaling || { enabled: false, value: 100 });
+            setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
+          }
+        });
+      } else {
+        toast.error('Failed to toggle Dyslexia Font', {
+          id: FEATURE_TOAST_ID
+        });
+        // Revert UI state if operation failed
+        setDyslexia(!checked);
+      }
+    });
+  };
+  
+  const handleReadingLine = (checked: boolean) => {
+    setReadingLine(checked);
+    
+    // Send message to background script
+    chrome.runtime.sendMessage({ 
+      action: "toggleFeature", 
+      feature: "readingLine", 
+      enabled: checked 
+    }, (response) => {
+      if (response && response.status === "success") {
+        toast.success(`Reading Guide ${checked ? 'enabled' : 'disabled'}!`, {
+          id: FEATURE_TOAST_ID
+        });
+        
+        // Get updated state to ensure UI stays in sync with actual state
+        chrome.runtime.sendMessage({ action: "getState" }, (response: AccessibilityState) => {
+          if (response) {
+            setVision(response.highContrast);
+            setDyslexia(response.dyslexiaFont);
+            setReadingLine(response.readingLine || false);
+            setTextScaling(response.textScaling || { enabled: false, value: 100 });
+            setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
+          }
+        });
+      } else {
+        toast.error('Failed to toggle Reading Guide', {
+          id: FEATURE_TOAST_ID
+        });
+        // Revert UI state if operation failed
+        setReadingLine(!checked);
+      }
+    });
+  };
+  
+  const handleTextScaling = (enabled: boolean, value: number) => {
+    setTextScaling({ enabled, value });
+    
+    // Send message to background script
+    chrome.runtime.sendMessage({ 
+      action: "toggleFeature", 
+      feature: "textScaling", 
+      enabled, 
+      value 
+    }, (response) => {
+      if (response && response.status === "success") {
+        toast.success(`Text Scaling ${enabled ? 'enabled' : 'disabled'}!`, {
+          id: FEATURE_TOAST_ID
+        });
+        
+        // Get updated state to ensure UI stays in sync with actual state
+        chrome.runtime.sendMessage({ action: "getState" }, (response: AccessibilityState) => {
+          if (response) {
+            setVision(response.highContrast);
+            setDyslexia(response.dyslexiaFont);
+            setReadingLine(response.readingLine || false);
+            setTextScaling(response.textScaling || { enabled: false, value: 100 });
+            setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
+          }
+        });
+      } else {
+        toast.error('Failed to toggle Text Scaling', {
+          id: FEATURE_TOAST_ID
+        });
+        // Revert UI state if operation failed
+        setTextScaling({ enabled: !enabled, value });
+      }
+    });
+  };
+  
+  const handleLineHeight = (enabled: boolean, value: number) => {
+    setLineHeight({ enabled, value });
+    
+    // Send message to background script
+    chrome.runtime.sendMessage({ 
+      action: "toggleFeature", 
+      feature: "lineHeight", 
+      enabled, 
+      value 
+    }, (response) => {
+      if (response && response.status === "success") {
+        toast.success(`Line Height ${enabled ? 'enabled' : 'disabled'}!`, {
+          id: FEATURE_TOAST_ID
+        });
+        
+        // Get updated state to ensure UI stays in sync with actual state
+        chrome.runtime.sendMessage({ action: "getState" }, (response: AccessibilityState) => {
+          if (response) {
+            setVision(response.highContrast);
+            setDyslexia(response.dyslexiaFont);
+            setReadingLine(response.readingLine || false);
+            setTextScaling(response.textScaling || { enabled: false, value: 100 });
+            setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
+          }
+        });
+      } else {
+        toast.error('Failed to toggle Line Height', {
+          id: FEATURE_TOAST_ID
+        });
+        // Revert UI state if operation failed
+        setLineHeight({ enabled: !enabled, value });
+      }
+    });
+  };
   
   // Simple handler for non-functional toggles - updated with toast ID
   const handleToggle = (setter: React.Dispatch<React.SetStateAction<boolean>>, name: string) => (checked: boolean) => {
@@ -124,6 +310,71 @@ export default function Popup() {
     toast.success(`${name} ${checked ? 'enabled' : 'disabled'}!`, {
       id: FEATURE_TOAST_ID
     });
+  };
+  
+  // Handler to turn off all accessibility features at once
+  const handleTurnOffAll = () => {
+    // Show a loading toast first
+    toast.loading('Turning off all features...', {
+      id: FEATURE_TOAST_ID
+    });
+    
+    try {
+      // Send message to background script to turn everything off
+      chrome.runtime.sendMessage({ 
+        action: "turnOffAll"
+      }, (response) => {
+        // Handle potential runtime errors properly
+        if (chrome.runtime.lastError) {
+          console.error("Error turning off all features:", chrome.runtime.lastError.message || "Unknown error");
+          toast.error('Failed to turn off all features', {
+            id: FEATURE_TOAST_ID
+          });
+          return;
+        }
+        
+        if (response && response.status === "success") {
+          // Update all local state values
+          setVision(false);
+          setDyslexia(false);
+          setMotion(false);
+          setTextScaling({ enabled: false, value: 100 });
+          setReadingLine(false);
+          setLineHeight({ enabled: false, value: 1.5 });
+          setMotor(false);
+          setLargeTargets(false);
+          setCustomCursor(false);
+          setStickyKeys(false);
+          setHoverControls(false);
+          setSimplifiedView(false);
+          setFocusMode(false);
+          setAiAlt(false);
+          
+          // Notify the user
+          toast.success('All accessibility features turned off', {
+            id: FEATURE_TOAST_ID
+          });
+          
+          // Reset dark mode if it was set by high contrast
+          if (localStorage.getItem('darkModeByHighContrast') === 'true') {
+            setDarkMode(false);
+            setTheme('light');
+            localStorage.setItem('theme', 'light');
+            localStorage.removeItem('darkModeByHighContrast');
+          }
+        } else {
+          toast.error('Failed to turn off all features', {
+            id: FEATURE_TOAST_ID
+          });
+        }
+      });
+    } catch (err) {
+      // Catch any unexpected errors
+      console.error("Unexpected error turning off features:", err);
+      toast.error('Failed to turn off all features', {
+        id: FEATURE_TOAST_ID
+      });
+    }
   };
   
   return (
@@ -157,7 +408,7 @@ export default function Popup() {
             <span className="flex items-center gap-2">
               <Type size={16} /> Dyslexia Font
             </span>
-            <Switch checked={dyslexia} onCheckedChange={handleToggle(setDyslexia, 'Dyslexia Font')} />
+            <Switch checked={dyslexia} onCheckedChange={handleDyslexia} />
           </div>
 
           <div className="flex items-center justify-between">
@@ -167,25 +418,87 @@ export default function Popup() {
             <Switch checked={motion} onCheckedChange={handleToggle(setMotion, 'Reduced Motion')} />
           </div>
           
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <TextSelect size={16} /> Text Scaling
-            </span>
-            <Switch checked={textScaling} onCheckedChange={handleToggle(setTextScaling, 'Text Scaling')} />
+          <div className="flex flex-col">
+            <CollapsibleSlider
+              icon={<TextSelect size={16} />}
+              label="Text Scaling"
+              checked={textScaling.enabled}
+              sliderValue={textScaling.value}
+              min={60}
+              max={200}
+              step={5}
+              formatValue={(val) => `${val}%`}
+              onCheckedChange={(enabled) => handleTextScaling(enabled, 100)}
+              onSliderChange={(value) => {
+                setTextScaling(prev => ({ ...prev, value }));
+                
+                // Don't send too many requests while slider is moving
+                if (isTextScalingUpdating) return;
+                
+                setIsTextScalingUpdating(true);
+                chrome.runtime.sendMessage({
+                  action: "updateTextScaling",
+                  value
+                }, (response) => {
+                  setTimeout(() => {
+                    setIsTextScalingUpdating(false);
+                  }, 150); // Add delay before allowing next update
+                  
+                  if (!response || response.status !== "success") {
+                    toast.error('Failed to update text size', {
+                      id: FEATURE_TOAST_ID
+                    });
+                    // Revert to previous value if failed
+                    setTextScaling(prev => ({ ...prev, value: textScaling.value }));
+                  }
+                });
+              }}
+            />
           </div>
           
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <RulerIcon size={16} /> Reading Guide
             </span>
-            <Switch checked={readingGuide} onCheckedChange={handleToggle(setReadingGuide, 'Reading Guide')} />
+            <Switch checked={readingLine} onCheckedChange={handleReadingLine} />
           </div>
           
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <AlignJustify size={16} /> Line Height
-            </span>
-            <Switch checked={lineHeight} onCheckedChange={handleToggle(setLineHeight, 'Line Height')} />
+          <div className="flex flex-col">
+            <CollapsibleSlider
+              icon={<AlignJustify size={16} />}
+              label="Line Height"
+              checked={lineHeight.enabled}
+              sliderValue={lineHeight.value}
+              min={1.0}
+              max={2.5}
+              step={0.1}
+              formatValue={(val) => `${val.toFixed(1)}x`}
+              onCheckedChange={(enabled) => handleLineHeight(enabled, 1.5)}
+              onSliderChange={(value) => {
+                setLineHeight(prev => ({ ...prev, value }));
+                
+                // Don't send too many requests while slider is moving
+                if (isLineHeightUpdating) return;
+                
+                setIsLineHeightUpdating(true);
+                chrome.runtime.sendMessage({
+                  action: "updateLineHeight",
+                  value
+                }, (response) => {
+                  setTimeout(() => {
+                    setIsLineHeightUpdating(false);
+                  }, 150); // Add delay before allowing next update
+                  
+                  if (!response || response.status !== "success") {
+                    toast.error('Failed to update line height', {
+                      id: FEATURE_TOAST_ID
+                    });
+                    // Revert to previous value if failed
+                    setLineHeight(prev => ({ ...prev, value: lineHeight.value }));
+                  }
+                });
+              }}
+            />
           </div>
         </CardContent>
       </Card>
@@ -272,6 +585,13 @@ export default function Popup() {
           </div>
         </CardContent>
       </Card>
+
+      <button 
+        onClick={handleTurnOffAll}
+        className="w-full py-2 mt-4 text-sm font-medium text-white bg-red-600 rounded hover:bg-red-700"
+      >
+        Turn All Off
+      </button>
 
       <p className="text-xs text-muted-foreground">
         Yusuf Arpaci (s4012930)

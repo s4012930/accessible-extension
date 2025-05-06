@@ -11,6 +11,7 @@ vi.mock('sonner', () => ({
     success: vi.fn(),
     error: vi.fn(),
     info: vi.fn(),
+    loading: vi.fn(),
   },
   Toaster: vi.fn(() => <div data-testid="mock-toaster" />),
 }));
@@ -42,6 +43,10 @@ const chromeMock = {
       }
       return true;
     }),
+    onMessage: {
+      addListener: vi.fn(),
+      removeListener: vi.fn()
+    }
   },
 };
 Object.defineProperty(window, 'chrome', { value: chromeMock });
@@ -210,5 +215,84 @@ describe('Popup Component', () => {
     expect(localStorageMock.setItem).toHaveBeenCalledWith('theme', 'light');
     expect(localStorageMock.removeItem).toHaveBeenCalledWith('darkModeByHighContrast');
     expect(toast.success).toHaveBeenCalledWith('High Contrast mode disabled!', { id: 'feature-toggle' });
+  });
+  
+  it('renders the Turn All Off button', () => {
+    render(<App />);
+    
+    // Check the button is in the document
+    const turnOffButton = screen.getByRole('button', { name: /turn all off/i });
+    expect(turnOffButton).toBeInTheDocument();
+    expect(turnOffButton).toHaveTextContent('Turn All Off');
+    expect(turnOffButton).toHaveClass('bg-red-600');
+  });
+  
+  it('clicking Turn All Off button sends correct message and updates UI', () => {
+    // Setup: mock state where some features are enabled
+    (chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (message, callback) => {
+        if (message && message.action === "getState") {
+          callback({ 
+            highContrast: true, 
+            dyslexiaFont: true,
+            readingLine: true,
+            textScaling: { enabled: true, value: 120 },
+            lineHeight: { enabled: true, value: 2.0 } 
+          });
+        } else if (message && message.action === "turnOffAll") {
+          callback({ 
+            status: "success",
+            state: {
+              highContrast: false,
+              dyslexiaFont: false,
+              readingLine: false,
+              textScaling: { enabled: false, value: 100 },
+              lineHeight: { enabled: false, value: 1.5 }
+            }
+          });
+        } else if (callback && typeof callback === 'function') {
+          callback({ status: "success" });
+        }
+        return true;
+      }
+    );
+    
+    // Set dark mode as enabled by high contrast
+    localStorageMock.setItem('darkModeByHighContrast', 'true');
+    localStorageMock.setItem('theme', 'dark');
+    
+    const { rerender } = render(<App />);
+    
+    // Clear previous mock calls from setup
+    vi.clearAllMocks();
+    
+    // Find and click the Turn All Off button
+    const turnOffButton = screen.getByRole('button', { name: /turn all off/i });
+    fireEvent.click(turnOffButton);
+    
+    // Verify the loading toast was shown
+    expect(toast.loading).toHaveBeenCalledWith('Turning off all features...', { id: 'feature-toggle' });
+    
+    // Check the correct message was sent to the background script
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      { action: "turnOffAll" }, 
+      expect.any(Function)
+    );
+    
+    // Simulate callback response
+    rerender(<App />);
+    
+    // Check success toast was shown
+    expect(toast.success).toHaveBeenCalledWith('All accessibility features turned off', { id: 'feature-toggle' });
+    
+    // Verify dark mode was reset if it was set by high contrast
+    expect(localStorageMock.setItem).toHaveBeenCalledWith('theme', 'light');
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('darkModeByHighContrast');
+    
+    // Check all switches are unchecked after turning everything off
+    const switches = screen.getAllByRole('switch');
+    for (const switchEl of switches) {
+      expect(switchEl.getAttribute('data-state')).toBe('unchecked');
+    }
   });
 });
