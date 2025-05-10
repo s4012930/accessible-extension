@@ -9,7 +9,7 @@ html.accessibility-high-contrast iframe {
   filter: invert(100%) hue-rotate(180deg) !important;
 }
 
-/* Preserve original colors for images and videos */
+/* Preserve original colours for images and videos */
 html.accessibility-high-contrast img,
 html.accessibility-high-contrast video {
   filter: invert(100%) hue-rotate(180deg) !important;

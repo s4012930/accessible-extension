@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run copy-css",
+    "copy-css": "node scripts/copy-css.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
@@ -30,8 +31,8 @@
   "devDependencies": {
     "@eslint/js": "^9.22.0",
     "@tailwindcss/postcss": "^4.1.4",
-    "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/chrome": "^0.0.316",
     "@types/node": "^22.14.1",
     "@types/react": "^19.0.10",
