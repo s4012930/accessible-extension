@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { CollapsibleSlider } from '@/components/ui/collapsible-slider';
-import { Contrast, Type, Keyboard, Video, BookA, Eye, MousePointer, Brain, Sun, Moon, TextSelect, RulerIcon, AlignJustify, MousePointerClick, MousePointer2, StickyNote, MousePointerSquareDashed, LayoutDashboard, Focus, MoveHorizontal, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Contrast, Type, Keyboard, Video, BookA, Eye, MousePointer, Brain, Sun, Moon, TextSelect, RulerIcon, AlignJustify, MousePointerClick, MousePointer2, StickyNote, MousePointerSquareDashed, LayoutDashboard, Focus, MoveHorizontal, EyeOff, ChevronDown, ChevronUp, Link2, ImageIcon } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { useTheme } from 'next-themes';
@@ -126,10 +126,11 @@ export default function Popup() {
   const [customCursor, setCustomCursor] = useState(false);
   const [stickyKeys, setStickyKeys] = useState(false);
   const [hoverControls, setHoverControls] = useState(false);
-  
   // Cognitive features
   const [simplifiedView, setSimplifiedView] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [highlightLinks, setHighlightLinks] = useState(false);
+  const [imageDescriptions, setImageDescriptions] = useState(false);
   
   // Misc features
   const [aiAlt, setAiAlt] = useState(false);
@@ -490,10 +491,12 @@ export default function Popup() {
           setMotor(false);
           setLargeTargets(false);
           setCustomCursor(false);
-          setStickyKeys(false);
+          setStickyKeys(false);          
           setHoverControls(false);
           setSimplifiedView(false);
           setFocusMode(false);
+          setHighlightLinks(false);
+          setImageDescriptions(false);
           setAiAlt(false);
           setColorBlind({ enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
           setReducedMotion(false);
@@ -798,12 +801,25 @@ export default function Popup() {
             </span>
             <Switch checked={simplifiedView} onCheckedChange={handleToggle(setSimplifiedView, 'Simplified View')} />
           </div>
-          
-          <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <Focus size={16} /> Focus Mode
             </span>
             <Switch checked={focusMode} onCheckedChange={handleToggle(setFocusMode, 'Focus Mode')} />
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Link2 size={16} /> Highlight Links
+            </span>
+            <Switch checked={highlightLinks} onCheckedChange={handleToggle(setHighlightLinks, 'Highlight Links')} />
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <ImageIcon size={16} /> Image Descriptions
+            </span>
+            <Switch checked={imageDescriptions} onCheckedChange={handleToggle(setImageDescriptions, 'Image Descriptions')} />
           </div>
         </CardContent>
       </Card>
