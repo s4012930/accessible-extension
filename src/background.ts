@@ -1,8 +1,17 @@
+// Define the valid colour blind types
+type ColorBlindType = 'deuteranopia' | 'protanopia' | 'tritanopia';
+
 // Global state for accessibility features
 interface AccessibilityState {
   highContrast: boolean;
   dyslexiaFont: boolean;
   readingLine: boolean;
+  colorBlind: {
+    enabled: boolean;
+    deuteranopia: boolean;
+    protanopia: boolean;
+    tritanopia: boolean;
+  };
   textScaling: {
     enabled: boolean;
     value: number;  // 100 = default (middle), can be decreased or increased
@@ -11,6 +20,7 @@ interface AccessibilityState {
     enabled: boolean;
     value: number;  // 1.5 = default (middle), can be decreased or increased
   };
+  reducedMotion: boolean;
   // Add other accessibility features as needed
 }
 
@@ -18,6 +28,12 @@ const state: AccessibilityState = {
   highContrast: false,
   dyslexiaFont: false,
   readingLine: false,
+  colorBlind: {
+    enabled: false,
+    deuteranopia: false,
+    protanopia: false,
+    tritanopia: false
+  },
   textScaling: {
     enabled: false,
     value: 100   // Default scale (100%)
@@ -25,7 +41,8 @@ const state: AccessibilityState = {
   lineHeight: {
     enabled: false,
     value: 1.5    // Default line height
-  }
+  },
+  reducedMotion: false
 };
 
 // Listen for messages from the popup
@@ -44,13 +61,54 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   
+  // Handle sync request from content script when colourblind filters are disabled
+  if (request.action === "syncColorBlindState") {
+    // Update our internal state with the state from the content script
+    if (request.state) {
+      state.colorBlind = request.state;
+      
+      // Apply the change to all tabs to ensure consistency
+      if (!state.colorBlind.enabled) {
+        // Turn off all types on all tabs
+        Promise.all([
+          applyColorBlindToAllTabs("deuteranopia", false),
+          applyColorBlindToAllTabs("protanopia", false),
+          applyColorBlindToAllTabs("tritanopia", false)
+        ]).then(() => {
+          chrome.storage.sync.set({ accessibilityState: state });
+          sendResponse({ status: "success", state });
+          
+          // Also notify popup of state change if it's open
+          chrome.runtime.sendMessage({ 
+            action: "stateUpdated", 
+            state: state 
+          }).catch(() => {
+            // Ignore errors if popup is not open to receive the message
+          });
+        }).catch((error) => {
+          console.error("Error syncing colorblind state:", error);
+          sendResponse({ status: "error", message: error.toString() });
+        });
+        return true;
+      }
+    }
+    
+    sendResponse({ status: "success", state });
+    return true;
+  }
+  
   if (request.action === "turnOffAll") {
     // Reset all state values to false
     state.highContrast = false;
     state.dyslexiaFont = false;
     state.readingLine = false;
+    state.colorBlind.enabled = false;
+    state.colorBlind.deuteranopia = false;
+    state.colorBlind.protanopia = false;
+    state.colorBlind.tritanopia = false;
     state.textScaling.enabled = false;
     state.lineHeight.enabled = false;
+    state.reducedMotion = false;
     
     // Save state to storage immediately
     chrome.storage.sync.set({ accessibilityState: state });
@@ -60,18 +118,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       applyToAllTabs("highContrast", false),
       applyToAllTabs("dyslexiaFont", false),
       applyToAllTabs("readingLine", false),
+      applyColorBlindToAllTabs("deuteranopia", false),
+      applyColorBlindToAllTabs("protanopia", false),
+      applyColorBlindToAllTabs("tritanopia", false),
       applyTextScalingToAllTabs(false, state.textScaling.value),
-      applyLineHeightToAllTabs(false, state.lineHeight.value)
+      applyLineHeightToAllTabs(false, state.lineHeight.value),
+      applyReducedMotionToAllTabs(false)
     ]).then(() => {
       // Send response only after all operations complete
       sendResponse({ status: "success", state });
     }).catch((error) => {
       console.error("Error turning off all features:", error);
-      // Still send a success response to ensure popup gets updated
       sendResponse({ status: "success", state });
     });
     
-    // Return true to indicate we'll send a response asynchronously
+    // Return true to send a response asynchronously
     return true;
   }
   
@@ -113,6 +174,116 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ status: "success", state });
       return true;
     }
+    
+    if (feature === "colorBlind") {
+      const { type, fullState } = request as { type?: ColorBlindType, fullState?: any };
+      
+      // If the request includes a complete state object, use that directly
+      if (fullState) {
+        // First disable all existing colourblind filters
+        if (state.colorBlind.deuteranopia) {
+          applyColorBlindToAllTabs("deuteranopia", false);
+        }
+        if (state.colorBlind.protanopia) {
+          applyColorBlindToAllTabs("protanopia", false);
+        }
+        if (state.colorBlind.tritanopia) {
+          applyColorBlindToAllTabs("tritanopia", false);
+        }
+        
+        // Update the state with the new values
+        state.colorBlind = fullState;
+        
+        // Apply only the active filter
+        if (fullState.enabled) {
+          if (state.colorBlind.deuteranopia) {
+            applyColorBlindToAllTabs("deuteranopia", true);
+          }
+          if (state.colorBlind.protanopia) {
+            applyColorBlindToAllTabs("protanopia", true);
+          }
+          if (state.colorBlind.tritanopia) {
+            applyColorBlindToAllTabs("tritanopia", true);
+          }
+        }
+        
+        // Save state to storage
+        chrome.storage.sync.set({ accessibilityState: state });
+        sendResponse({ status: "success", state });
+        return true;
+      } 
+      else if (type) {
+        // If enabling a filter, first disable all other types
+        if (enabled) {
+          // Disable all filters first, including the one being updated
+          if (state.colorBlind.deuteranopia) {
+            applyColorBlindToAllTabs("deuteranopia", false);
+          }
+          if (state.colorBlind.protanopia) {
+            applyColorBlindToAllTabs("protanopia", false);
+          }
+          if (state.colorBlind.tritanopia) {
+            applyColorBlindToAllTabs("tritanopia", false);
+          }
+          
+          // Update internal state - all filters off except the one being enabled
+          state.colorBlind.deuteranopia = false;
+          state.colorBlind.protanopia = false;
+          state.colorBlind.tritanopia = false;
+          state.colorBlind[type] = true;
+          state.colorBlind.enabled = true;
+        } else {
+          // If disabling, just update the specific filter
+          state.colorBlind[type] = false;
+          
+          // Apply the filter change to turn it off
+          applyColorBlindToAllTabs(type, false);
+          
+          // Update the main enabled flag based on if any filter is still enabled
+          state.colorBlind.enabled = state.colorBlind.deuteranopia || 
+                                   state.colorBlind.protanopia || 
+                                   state.colorBlind.tritanopia;
+        }
+        
+        // Apply the filter change if enabling
+        if (enabled) {
+          applyColorBlindToAllTabs(type, true);
+        }
+        
+        // Save state to storage for persistence
+        chrome.storage.sync.set({ accessibilityState: state });
+        sendResponse({ status: "success", state });
+      } else {
+        // If there's no specific type, toggle the main enabled flag
+        state.colorBlind.enabled = enabled;
+        
+        if (!enabled) {
+          // If disabling all colourblind modes, turn all types off
+          state.colorBlind.deuteranopia = false;
+          state.colorBlind.protanopia = false;
+          state.colorBlind.tritanopia = false;
+          
+          // Turn off all types on all tabs
+          Promise.all([
+            applyColorBlindToAllTabs("deuteranopia", false),
+            applyColorBlindToAllTabs("protanopia", false),
+            applyColorBlindToAllTabs("tritanopia", false)
+          ]).then(() => {
+            chrome.storage.sync.set({ accessibilityState: state });
+            sendResponse({ status: "success", state });
+          }).catch((error) => {
+            console.error("Error turning off colorblind filters:", error);
+            // Still send a success response to ensure popup gets updated
+            sendResponse({ status: "success", state });
+          });
+          return true;
+        } else {
+          chrome.storage.sync.set({ accessibilityState: state });
+          sendResponse({ status: "success", state });
+        }
+      }
+      return true;
+    }
 
     if (feature === "textScaling") {
       state.textScaling.enabled = enabled;
@@ -144,6 +315,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       
       // Save state to storage for persistence
       chrome.storage.sync.set({ accessibilityState: state });
+      sendResponse({ status: "success", state });
+      return true;
+    }
+
+    if (feature === "reducedMotion") {
+      state.reducedMotion = enabled;
+      
+      // Apply to all tabs
+      applyReducedMotionToAllTabs(enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state }, () => {
+        // Ensure popup gets updated state
+        chrome.runtime.sendMessage({ 
+          action: "stateUpdated", 
+          state: state 
+        }).catch(() => {
+          // Ignore errors if popup is not open
+        });
+      });
+      
       sendResponse({ status: "success", state });
       return true;
     }
@@ -180,6 +372,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.feature === "readingLine") {
       state.readingLine = request.enabled;
+      chrome.storage.sync.set({ accessibilityState: state });
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      return true;
+    }
+
+    if (request.feature === "colorBlind") {
+      const { type } = request as { type?: ColorBlindType };
+      if (type) {
+        state.colorBlind[type] = request.enabled;
+        // Update the main enabled flag
+        state.colorBlind.enabled = state.colorBlind.deuteranopia || 
+                                  state.colorBlind.protanopia || 
+                                  state.colorBlind.tritanopia;
+      } else {
+        state.colorBlind.enabled = request.enabled;
+      }
+      chrome.storage.sync.set({ accessibilityState: state });
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      return true;
+    }
+
+    if (request.feature === "reducedMotion") {
+      state.reducedMotion = request.enabled;
       chrome.storage.sync.set({ accessibilityState: state });
       // Broadcast state change to popup if it's open
       chrome.runtime.sendMessage({ 
@@ -240,7 +467,7 @@ async function applyToAllTabs(feature: string, enable: boolean): Promise<void> {
       
       const tabId = tab.id;
       
-      // Apply the appropriate CSS if needed
+      // Apply the CSS
       if (enable) {
         try {
           if (feature === "highContrast") {
@@ -276,7 +503,6 @@ async function applyToAllTabs(feature: string, enable: boolean): Promise<void> {
         }, (response) => {
           if (chrome.runtime.lastError) {
             console.error(`Error sending message to tab ${tabId}:`, chrome.runtime.lastError);
-            // Content script might not be ready, try injecting it first
             chrome.scripting.executeScript({
               target: { tabId },
               files: ['content-script.js']
@@ -301,6 +527,101 @@ async function applyToAllTabs(feature: string, enable: boolean): Promise<void> {
     }
   } catch (error) {
     console.error(`Error applying ${feature}:`, error);
+  }
+}
+
+// Function to apply colourblind mode to all tabs
+async function applyColorBlindToAllTabs(type: ColorBlindType, enable: boolean): Promise<void> {
+  try {
+    // Get all tabs
+    const tabs = await chrome.tabs.query({});
+    
+    // For each tab
+    for (const tab of tabs) {
+      if (!tab.id || !tab.url || !tab.url.startsWith('http')) continue;
+      
+      const tabId = tab.id;
+      
+      // Apply the CSS if needed
+      if (enable) {
+        try {
+          await chrome.scripting.insertCSS({
+            target: { tabId },
+            files: [`/${type}.css`]
+          });
+        } catch (err) {
+          console.error(`Failed to insert ${type} CSS into tab ${tabId}:`, err);
+          // Continue with other tabs even if current one fails
+        }
+      } else {
+
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId },
+            func: (colorType) => {
+              // Remove the specific colourblind class
+              document.documentElement.classList.remove(`accessibility-${colorType}`);
+              
+              // Find and remove the specific colorblind stylesheet
+              const links = document.querySelectorAll('link[rel="stylesheet"]');
+              links.forEach(link => {
+                const href = link.getAttribute('href');
+                if (href && href.includes(`${colorType}.css`)) {
+                  link.remove();
+                }
+              });
+              
+              // Let the content script know to update its state
+              if (window.postMessage) {
+                window.postMessage({
+                  source: "accessibility-extension",
+                  action: "colorBlindRemoved",
+                  type: colorType
+                }, "*");
+              }
+            },
+            args: [type]
+          });
+        } catch (err) {
+          console.error(`Error removing ${type} CSS from tab ${tabId}:`, err);
+        }
+      }
+      
+      // Send message to content script with error handling
+      try {
+        // Wait for confirmation that the message was received
+        chrome.tabs.sendMessage(tabId, {
+          action: "toggleColorBlind",
+          enabled: enable,
+          type: type,
+          highContrastEnabled: state.highContrast // Always include high contrast state
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error(`Error sending colorblind message to tab ${tabId}:`, chrome.runtime.lastError);
+            chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['content-script.js']
+            }).then(() => {
+              // Retry sending message after script is injected
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tabId, {
+                  action: "toggleColorBlind",
+                  enabled: enable,
+                  type: type,
+                  highContrastEnabled: state.highContrast // Always include high contrast state
+                });
+              }, 100);
+            }).catch(err => console.error(`Error injecting content script for colorblind into tab ${tabId}:`, err));
+          } else if (response && response.status === "success") {
+            console.log(`Successfully applied ${type}=${enable} to tab ${tabId}`);
+          }
+        });
+      } catch (err) {
+        console.error(`Error sending colorblind message to tab ${tabId}:`, err);
+      }
+    }
+  } catch (error) {
+    console.error(`Error applying ${type}:`, error);
   }
 }
 
@@ -351,7 +672,6 @@ async function applyTextScalingToAllTabs(enabled: boolean, value: number): Promi
                   enabled,
                   value
                 }).catch(err => {
-                  // Just log and continue if this fails too
                   console.log(`Retry failed for tab ${tabId}:`, err);
                 });
               }, 200);
@@ -432,6 +752,63 @@ async function applyLineHeightToAllTabs(enabled: boolean, value: number): Promis
   }
 }
 
+// Function to apply reduced motion to all tabs
+async function applyReducedMotionToAllTabs(enabled: boolean): Promise<void> {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (!tab.id || !tab.url || !tab.url.startsWith('http')) continue;
+      const tabId = tab.id;
+      
+      // Send message to content script with proper error handling
+      try {
+        chrome.tabs.sendMessage(tabId, {
+          action: "toggleReducedMotion",
+          enabled
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log(`Tab ${tabId} not ready for reduced motion, injecting content script first`);
+            // Content script not ready, inject it first and retry
+            chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['content-script.js']
+            }).then(() => {
+              // Also inject CSS if enabled
+              if (enabled) {
+                return chrome.scripting.insertCSS({
+                  target: { tabId },
+                  files: ["/reduced-motion.css"]
+                }).catch(err => console.log(`CSS injection error for tab ${tabId}:`, err));
+              }
+            }).then(() => {
+              // Retry sending message after script is injected with a short delay
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tabId, {
+                  action: "toggleReducedMotion",
+                  enabled
+                }).catch(err => {
+                  // Just log and continue if this fails too
+                  console.log(`Retry failed for tab ${tabId}:`, err);
+                });
+              }, 200);
+            }).catch(err => {
+              console.log(`Script injection failed for tab ${tabId}:`, err);
+              // The tab might not support content scripts (e.g. chrome:// URLs)
+            });
+          } else if (response && response.status === "success") {
+            console.log(`Successfully applied reduced motion=${enabled} to tab ${tabId}`);
+          }
+        });
+      } catch (err) {
+        // This catch is just a safeguard, most errors should be caught by the callback
+        console.log(`Error applying reduced motion to tab ${tabId}:`, err);
+      }
+    }
+  } catch (error) {
+    console.log(`Error getting tabs:`, error);
+  }
+}
+
 // Initialize by loading state from storage
 chrome.storage.sync.get("accessibilityState", (result) => {
   if (result.accessibilityState) {
@@ -440,7 +817,7 @@ chrome.storage.sync.get("accessibilityState", (result) => {
   }
 });
 
-// When a new tab is activated, check if we need to apply settings
+// When a new tab is activated, check to apply settings
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   // Get the tab information
   try {
@@ -486,12 +863,48 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         console.error("Error inserting reading line CSS:", err);
       }
     }
+
+    if (state.colorBlind.enabled) {
+      try {
+        if (state.colorBlind.deuteranopia) {
+          await chrome.scripting.insertCSS({
+            target: { tabId: activeInfo.tabId },
+            files: ["/deuteranopia.css"]
+          });
+        }
+        if (state.colorBlind.protanopia) {
+          await chrome.scripting.insertCSS({
+            target: { tabId: activeInfo.tabId },
+            files: ["/protanopia.css"]
+          });
+        }
+        if (state.colorBlind.tritanopia) {
+          await chrome.scripting.insertCSS({
+            target: { tabId: activeInfo.tabId },
+            files: ["/tritanopia.css"]
+          });
+        }
+      } catch (err) {
+        console.error("Error inserting colorblind CSS:", err);
+      }
+    }
+
+    if (state.reducedMotion) {
+      try {
+        await chrome.scripting.insertCSS({
+          target: { tabId: activeInfo.tabId },
+          files: ["/reduced-motion.css"]
+        });
+      } catch (err) {
+        console.error("Error inserting reduced motion CSS:", err);
+      }
+    }
   } catch (err) {
     console.error("Error getting tab info:", err);
   }
 });
 
-// Enhanced handling for visibility changes (e.g., coming back after minimizing browser)
+// Enhanced handling for visibility changes
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url && tab.url.startsWith('http')) {
     // First inject the content script
@@ -544,6 +957,39 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
           enabled: true,
           value: state.lineHeight.value
         }).catch(err => console.log("Non-critical: Error applying line height on page load:", err));
+      }
+
+      // Apply colourblind modes if enabled
+      if (state.colorBlind && state.colorBlind.enabled) {
+        if (state.colorBlind.deuteranopia) {
+          chrome.tabs.sendMessage(tabId, {
+            action: "toggleColorBlind",
+            enabled: true,
+            type: "deuteranopia"
+          }).catch(err => console.log("Non-critical: Error applying deuteranopia on page load:", err));
+        }
+        if (state.colorBlind.protanopia) {
+          chrome.tabs.sendMessage(tabId, {
+            action: "toggleColorBlind",
+            enabled: true,
+            type: "protanopia"
+          }).catch(err => console.log("Non-critical: Error applying protanopia on page load:", err));
+        }
+        if (state.colorBlind.tritanopia) {
+          chrome.tabs.sendMessage(tabId, {
+            action: "toggleColorBlind",
+            enabled: true,
+            type: "tritanopia"
+          }).catch(err => console.log("Non-critical: Error applying tritanopia on page load:", err));
+        }
+      }
+
+      // Apply reduced motion if enabled
+      if (state.reducedMotion) {
+        chrome.tabs.sendMessage(tabId, {
+          action: "toggleReducedMotion",
+          enabled: true
+        }).catch(err => console.log("Non-critical: Error applying reduced motion on page load:", err));
       }
     }).catch(err => {
       console.log(`Error injecting content script into tab ${tabId} (this is normal for some pages):`, err);

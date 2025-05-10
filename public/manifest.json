@@ -23,7 +23,17 @@
 
     "web_accessible_resources": [
       {
-        "resources": ["high-contrast.css", "dyslexic.css", "reading-line.css", "fonts/*"],
+        "resources": [
+          "high-contrast.css", 
+          "dyslexic.css", 
+          "reading-line.css", 
+          "colorblind.css", 
+          "deuteranopia.css", 
+          "protanopia.css", 
+          "tritanopia.css",
+          "reduced-motion.css", 
+          "fonts/*"
+        ],
         "matches": ["<all_urls>"]
       }
     ],

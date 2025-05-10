@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { CollapsibleSlider } from '@/components/ui/collapsible-slider';
-import { Contrast, Type, Keyboard, Video, BookA, Eye, MousePointer, Brain, Sun, Moon, TextSelect, RulerIcon, AlignJustify, MousePointerClick, MousePointer2, StickyNote, MousePointerSquareDashed, LayoutDashboard, Focus, MoveHorizontal } from 'lucide-react';
+import { Contrast, Type, Keyboard, Video, BookA, Eye, MousePointer, Brain, Sun, Moon, TextSelect, RulerIcon, AlignJustify, MousePointerClick, MousePointer2, StickyNote, MousePointerSquareDashed, LayoutDashboard, Focus, MoveHorizontal, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { useTheme } from 'next-themes';
+import { cn } from '@/lib/utils';
 
 // Define constant toast ID
 const FEATURE_TOAST_ID = 'feature-toggle';
@@ -14,6 +15,12 @@ interface AccessibilityState {
   highContrast: boolean;
   dyslexiaFont: boolean;
   readingLine: boolean;
+  colorBlind?: {
+    enabled: boolean;
+    deuteranopia: boolean;
+    protanopia: boolean;
+    tritanopia: boolean;
+  };
   textScaling?: {
     enabled: boolean;
     value: number;
@@ -22,6 +29,73 @@ interface AccessibilityState {
     enabled: boolean;
     value: number;
   };
+  reducedMotion?: boolean;
+}
+
+// Define a new component for collapsible toggles
+interface CollapsibleTogglesProps {
+  icon: React.ReactNode;
+  label: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  children: React.ReactNode;
+  className?: string;
+}
+
+function CollapsibleToggles({
+  icon,
+  label,
+  checked,
+  onCheckedChange,
+  children,
+  className
+}: CollapsibleTogglesProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // When the switch is turned off, collapse the toggles
+  useEffect(() => {
+    if (!checked) {
+      setIsExpanded(false);
+    }
+  }, [checked]);
+
+  // When the switch is turned on, expand the toggles
+  const handleCheckedChange = (newChecked: boolean) => {
+    onCheckedChange(newChecked);
+    if (newChecked) {
+      setIsExpanded(true);
+    }
+  };
+
+  return (
+    <div className={cn("py-1", className)}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="flex items-center gap-2">
+          {icon}
+          <span>{label}</span>
+        </span>
+        <div className="flex items-center gap-2">
+          {checked && (
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="p-1 rounded-full hover:bg-muted"
+              aria-label={isExpanded ? 'Hide options' : 'Show options'}
+            >
+              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+          )}
+          <Switch checked={checked} onCheckedChange={handleCheckedChange} />
+        </div>
+      </div>
+      
+      {checked && isExpanded && (
+        <div className="mt-2 pl-8 space-y-2">
+          {children}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Popup() {
@@ -31,10 +105,16 @@ export default function Popup() {
   // Vision features
   const [vision, setVision] = useState(false);
   const [dyslexia, setDyslexia] = useState(false);
-  const [motion, setMotion] = useState(false);
+  const [colorBlind, setColorBlind] = useState({
+    enabled: false,
+    deuteranopia: false,
+    protanopia: false,
+    tritanopia: false
+  });
   const [textScaling, setTextScaling] = useState({ enabled: false, value: 100 });
   const [readingLine, setReadingLine] = useState(false);
   const [lineHeight, setLineHeight] = useState({ enabled: false, value: 1.5 });
+  const [reducedMotion, setReducedMotion] = useState(false);
   
   // Separate throttling flags for each slider to prevent race conditions
   const [isTextScalingUpdating, setIsTextScalingUpdating] = useState(false);
@@ -63,8 +143,10 @@ export default function Popup() {
         setVision(updatedState.highContrast);
         setDyslexia(updatedState.dyslexiaFont);
         setReadingLine(updatedState.readingLine || false);
+        setColorBlind(updatedState.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
         setTextScaling(updatedState.textScaling || { enabled: false, value: 100 });
         setLineHeight(updatedState.lineHeight || { enabled: false, value: 1.5 });
+        setReducedMotion(updatedState.reducedMotion || false);
       }
       return true;
     };
@@ -77,8 +159,10 @@ export default function Popup() {
         setVision(response.highContrast);
         setDyslexia(response.dyslexiaFont);
         setReadingLine(response.readingLine || false);
+        setColorBlind(response.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
         setTextScaling(response.textScaling || { enabled: false, value: 100 });
         setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
+        setReducedMotion(response.reducedMotion || false);
       }
     });
     
@@ -140,8 +224,10 @@ export default function Popup() {
             setVision(response.highContrast);
             setDyslexia(response.dyslexiaFont);
             setReadingLine(response.readingLine || false);
+            setColorBlind(response.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
             setTextScaling(response.textScaling || { enabled: false, value: 100 });
             setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
+            setReducedMotion(response.reducedMotion || false);
           }
         });
       } else {
@@ -186,8 +272,10 @@ export default function Popup() {
             setVision(response.highContrast);
             setDyslexia(response.dyslexiaFont);
             setReadingLine(response.readingLine || false);
+            setColorBlind(response.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
             setTextScaling(response.textScaling || { enabled: false, value: 100 });
             setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
+            setReducedMotion(response.reducedMotion || false);
           }
         });
       } else {
@@ -220,8 +308,10 @@ export default function Popup() {
             setVision(response.highContrast);
             setDyslexia(response.dyslexiaFont);
             setReadingLine(response.readingLine || false);
+            setColorBlind(response.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
             setTextScaling(response.textScaling || { enabled: false, value: 100 });
             setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
+            setReducedMotion(response.reducedMotion || false);
           }
         });
       } else {
@@ -255,8 +345,10 @@ export default function Popup() {
             setVision(response.highContrast);
             setDyslexia(response.dyslexiaFont);
             setReadingLine(response.readingLine || false);
+            setColorBlind(response.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
             setTextScaling(response.textScaling || { enabled: false, value: 100 });
             setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
+            setReducedMotion(response.reducedMotion || false);
           }
         });
       } else {
@@ -290,8 +382,10 @@ export default function Popup() {
             setVision(response.highContrast);
             setDyslexia(response.dyslexiaFont);
             setReadingLine(response.readingLine || false);
+            setColorBlind(response.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
             setTextScaling(response.textScaling || { enabled: false, value: 100 });
             setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
+            setReducedMotion(response.reducedMotion || false);
           }
         });
       } else {
@@ -300,6 +394,59 @@ export default function Popup() {
         });
         // Revert UI state if operation failed
         setLineHeight({ enabled: !enabled, value });
+      }
+    });
+  };
+  
+  const handleColorBlind = (checked: boolean, type: 'deuteranopia' | 'protanopia' | 'tritanopia') => {
+    // Create a new colorBlind state object based on the current toggle
+    const newColorBlindState = {
+      // Overall enabled state is true if any filter will be enabled after this action
+      enabled: checked || 
+               (type !== 'deuteranopia' && colorBlind.deuteranopia) || 
+               (type !== 'protanopia' && colorBlind.protanopia) || 
+               (type !== 'tritanopia' && colorBlind.tritanopia),
+      // When enabling a filter, all others should be disabled
+      deuteranopia: checked && type === 'deuteranopia' ? true : type === 'deuteranopia' ? false : checked ? false : colorBlind.deuteranopia,
+      protanopia: checked && type === 'protanopia' ? true : type === 'protanopia' ? false : checked ? false : colorBlind.protanopia,
+      tritanopia: checked && type === 'tritanopia' ? true : type === 'tritanopia' ? false : checked ? false : colorBlind.tritanopia
+    };
+
+    // Update the UI state immediately for better responsiveness
+    setColorBlind(newColorBlindState);
+    
+    // Send message to background script - always include the complete state
+    chrome.runtime.sendMessage({ 
+      action: "toggleFeature", 
+      feature: "colorBlind", 
+      enabled: checked, 
+      type,
+      // Send the full state to ensure background is aware of all filter states
+      fullState: newColorBlindState
+    }, (response) => {
+      if (response && response.status === "success") {
+        toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} ${checked ? 'enabled' : 'disabled'}!`, {
+          id: FEATURE_TOAST_ID
+        });
+        
+        // Get updated state to ensure UI stays in sync with actual state
+        chrome.runtime.sendMessage({ action: "getState" }, (response: AccessibilityState) => {
+          if (response) {
+            setVision(response.highContrast);
+            setDyslexia(response.dyslexiaFont);
+            setReadingLine(response.readingLine || false);
+            setColorBlind(response.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
+            setTextScaling(response.textScaling || { enabled: false, value: 100 });
+            setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
+            setReducedMotion(response.reducedMotion || false);
+          }
+        });
+      } else {
+        toast.error(`Failed to toggle ${type}`, {
+          id: FEATURE_TOAST_ID
+        });
+        // Revert UI state if operation failed
+        setColorBlind(prev => ({ ...prev, [type]: !checked, enabled: prev.deuteranopia || prev.protanopia || prev.tritanopia }));
       }
     });
   };
@@ -337,7 +484,6 @@ export default function Popup() {
           // Update all local state values
           setVision(false);
           setDyslexia(false);
-          setMotion(false);
           setTextScaling({ enabled: false, value: 100 });
           setReadingLine(false);
           setLineHeight({ enabled: false, value: 1.5 });
@@ -349,6 +495,8 @@ export default function Popup() {
           setSimplifiedView(false);
           setFocusMode(false);
           setAiAlt(false);
+          setColorBlind({ enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
+          setReducedMotion(false);
           
           // Notify the user
           toast.success('All accessibility features turned off', {
@@ -377,6 +525,32 @@ export default function Popup() {
     }
   };
   
+  // Handler for reduced motion toggle
+  const toggleReducedMotion = (checked: boolean) => {
+    // First update UI for responsiveness
+    setReducedMotion(checked);
+    
+    // Then send message to background script
+    chrome.runtime.sendMessage({ 
+      action: "toggleFeature",
+      feature: "reducedMotion",
+      enabled: checked
+    }, (response) => {
+      if (response && response.status === "success") {
+        // Show success toast
+        toast.success(`Reduced Motion ${checked ? 'enabled' : 'disabled'}!`, {
+          id: FEATURE_TOAST_ID
+        });
+      } else {
+        // Show error toast and revert UI state
+        toast.error(`Failed to toggle Reduced Motion`, {
+          id: FEATURE_TOAST_ID
+        });
+        setReducedMotion(!checked);
+      }
+    });
+  };
+
   return (
     <main className="w-80 p-4 space-y-4">
       <div className="flex items-center justify-between">
@@ -415,7 +589,7 @@ export default function Popup() {
             <span className="flex items-center gap-2">
               <Video size={16} /> Reduced Motion
             </span>
-            <Switch checked={motion} onCheckedChange={handleToggle(setMotion, 'Reduced Motion')} />
+            <Switch checked={reducedMotion} onCheckedChange={toggleReducedMotion} />
           </div>
           
           <div className="flex flex-col">
@@ -500,6 +674,70 @@ export default function Popup() {
               }}
             />
           </div>
+
+          <CollapsibleToggles
+            icon={<EyeOff size={16} />}
+            label="Color Blind Mode"
+            checked={colorBlind.enabled}
+            onCheckedChange={(enabled) => {
+              // Create new state with appropriate values
+              const newState = { 
+                enabled, 
+                deuteranopia: enabled ? colorBlind.deuteranopia : false, 
+                protanopia: enabled ? colorBlind.protanopia : false, 
+                tritanopia: enabled ? colorBlind.tritanopia : false 
+              };
+              
+              // Set local state
+              setColorBlind(newState);
+              
+              // Send the full state to background script to ensure proper synchronization
+              chrome.runtime.sendMessage({
+                action: "toggleFeature",
+                feature: "colorBlind",
+                enabled,
+                fullState: newState
+              }, (response) => {
+                if (response && response.status === "success") {
+                  toast.success(`Color Blind Mode ${enabled ? 'enabled' : 'disabled'}!`, {
+                    id: FEATURE_TOAST_ID
+                  });
+                  
+                  // Get updated state to ensure UI stays in sync with actual state
+                  chrome.runtime.sendMessage({ action: "getState" }, (response: AccessibilityState) => {
+                    if (response && response.colorBlind) {
+                      setColorBlind(response.colorBlind);
+                    }
+                  });
+                } else {
+                  toast.error('Failed to toggle Color Blind Mode', {
+                    id: FEATURE_TOAST_ID
+                  });
+                  // Revert UI state if operation failed
+                  setColorBlind(prev => ({ ...prev, enabled: !enabled }));
+                }
+              });
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <EyeOff size={16} /> Deuteranopia
+              </span>
+              <Switch checked={colorBlind.deuteranopia} onCheckedChange={(checked) => handleColorBlind(checked, 'deuteranopia')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <EyeOff size={16} /> Protanopia
+              </span>
+              <Switch checked={colorBlind.protanopia} onCheckedChange={(checked) => handleColorBlind(checked, 'protanopia')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <EyeOff size={16} /> Tritanopia
+              </span>
+              <Switch checked={colorBlind.tritanopia} onCheckedChange={(checked) => handleColorBlind(checked, 'tritanopia')} />
+            </div>
+          </CollapsibleToggles>
         </CardContent>
       </Card>
 

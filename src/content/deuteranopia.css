@@ -1,0 +1,63 @@
+html.accessibility-deuteranopia {
+  /* More pronounced filter for deuteranopia */
+  filter: contrast(1.5) brightness(1.1) saturate(0.3) hue-rotate(15deg) !important;
+}
+
+/* If high contrast is also enabled, a different approach is required */
+html.accessibility-deuteranopia.accessibility-high-contrast {
+  filter: invert(100%) hue-rotate(180deg) contrast(1.4) saturate(0.4) !important;
+}
+
+html.accessibility-deuteranopia img, 
+html.accessibility-deuteranopia video {
+  /* Preserve some colour perception for media */
+  filter: contrast(1.2) saturate(0.5) !important;
+}
+
+html.accessibility-deuteranopia.accessibility-high-contrast img,
+html.accessibility-deuteranopia.accessibility-high-contrast video {
+  filter: invert(100%) hue-rotate(180deg) contrast(1.2) saturate(0.5) !important;
+}
+
+/* Make important action elements more distinguishable */
+html.accessibility-deuteranopia button, 
+html.accessibility-deuteranopia a.btn, 
+html.accessibility-deuteranopia input[type="button"], 
+html.accessibility-deuteranopia input[type="submit"], 
+html.accessibility-deuteranopia input[type="reset"] {
+  outline: 2px solid #000 !important;
+  outline-offset: 2px;
+  border-radius: 4px !important;
+}
+
+/* Enhance form field visibility */
+html.accessibility-deuteranopia input, 
+html.accessibility-deuteranopia select, 
+html.accessibility-deuteranopia textarea {
+  border: 2px solid #000 !important;
+}
+
+/* Add text indicators for red/green status colours */
+html.accessibility-deuteranopia .danger, 
+html.accessibility-deuteranopia .error, 
+html.accessibility-deuteranopia .alert, 
+html.accessibility-deuteranopia .warning,
+html.accessibility-deuteranopia .success, 
+html.accessibility-deuteranopia .info, 
+html.accessibility-deuteranopia .status {
+  position: relative;
+}
+
+/* Keep only essential status indicators */
+html.accessibility-deuteranopia .danger::before, 
+html.accessibility-deuteranopia .error::before, 
+html.accessibility-deuteranopia .alert::before, 
+html.accessibility-deuteranopia .warning::before {
+  content: "▲ ";
+  font-weight: bold;
+}
+
+html.accessibility-deuteranopia .success::before {
+  content: "✓ ";
+  font-weight: bold;
+}

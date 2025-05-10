@@ -22,6 +22,10 @@ export default defineConfig({
         'high-contrast': 'src/content/high-contrast.css',
         'dyslexic': 'src/content/dyslexic.css',
         'reading-line': 'src/content/reading-line.css',
+        'deuteranopia': 'src/content/deuteranopia.css',
+        'protanopia': 'src/content/protanopia.css',
+        'tritanopia': 'src/content/tritanopia.css',
+        'reduced-motion': 'src/content/reduced-motion.css',
       },
       output: {
         entryFileNames: '[name].js',
