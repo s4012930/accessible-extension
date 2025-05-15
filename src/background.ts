@@ -965,6 +965,9 @@ async function applyLargeTargetsToAllTabs(enabled: boolean): Promise<void> {
                   target: { tabId },
                   files: ["/large-targets.css"]
                 }).catch(err => console.log(`CSS injection error for tab ${tabId}:`, err));
+              } else {
+
+                return Promise.resolve();
               }
             }).then(() => {              // Retry sending message after script is injected with a short delay
               setTimeout(() => {

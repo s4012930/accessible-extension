@@ -31,7 +31,10 @@ interface AccessibilityState {
   };
   reducedMotion?: boolean;
   keyboardNav?: boolean;
-  largeTargets?: boolean;
+  largeTargets?: {
+    enabled: boolean;
+    value: number;
+  };
 }
 
 // Define a new component for collapsible toggles
@@ -124,7 +127,7 @@ export default function Popup() {
   
   // Motor features
   const [motor, setMotor] = useState(false);
-  const [largeTargets, setLargeTargets] = useState(false);
+  const [largeTargets, setLargeTargets] = useState<{enabled: boolean, value: number}>({enabled: false, value: 1.5});
   const [customCursor, setCustomCursor] = useState(false);
   const [stickyKeys, setStickyKeys] = useState(false);
   const [hoverControls, setHoverControls] = useState(false);
@@ -151,7 +154,7 @@ export default function Popup() {
         setLineHeight(updatedState.lineHeight || { enabled: false, value: 1.5 });
         setReducedMotion(updatedState.reducedMotion || false);
         setMotor(updatedState.keyboardNav || false);
-        setLargeTargets(updatedState.largeTargets || false);
+        setLargeTargets(updatedState.largeTargets || {enabled: false, value: 1.5});
       }
       return true;
     };
@@ -168,7 +171,7 @@ export default function Popup() {
         setTextScaling(response.textScaling || { enabled: false, value: 100 });
         setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });        setReducedMotion(response.reducedMotion || false);
         setMotor(response.keyboardNav || false);
-        setLargeTargets(response.largeTargets || false);
+        setLargeTargets(response.largeTargets || {enabled: false, value: 1.5});
       }
       
       // Query the active tab directly to get the most up-to-date keyboard navigation state
@@ -540,7 +543,7 @@ export default function Popup() {
           setReadingLine(false);
           setLineHeight({ enabled: false, value: 1.5 });
           setMotor(false);
-          setLargeTargets(false);
+          setLargeTargets({enabled: false, value: 1.5});
           setCustomCursor(false);
           setStickyKeys(false);          
           setHoverControls(false);
@@ -608,7 +611,7 @@ export default function Popup() {
   // Handler for large targets toggle
   const toggleLargeTargets = (checked: boolean) => {
     // First update UI for responsiveness
-    setLargeTargets(checked);
+    setLargeTargets(prev => ({...prev, enabled: checked}));
     
     // Then send message to background script
     chrome.runtime.sendMessage({ 
@@ -626,7 +629,7 @@ export default function Popup() {
         toast.error(`Failed to toggle Larger Click Targets`, {
           id: FEATURE_TOAST_ID
         });
-        setLargeTargets(!checked);
+        setLargeTargets(prev => ({...prev, enabled: !checked}));
       }
     });
   };
@@ -863,7 +866,7 @@ export default function Popup() {
             <span className="flex items-center gap-2">
               <MousePointerClick size={16} /> Larger Click Targets
             </span>
-            <Switch checked={largeTargets} onCheckedChange={toggleLargeTargets} />
+            <Switch checked={largeTargets.enabled} onCheckedChange={toggleLargeTargets} />
           </div>
           
           <div className="flex items-center justify-between">
