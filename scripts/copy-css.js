@@ -17,6 +17,8 @@ const cssFiles = [
   'protanopia.css',
   'tritanopia.css',
   'reduced-motion.css',
+  'keyboard-nav.css',
+  'large-targets.css',
 ];
 
 console.log('Ensuring all CSS files are properly copied to the dist directory...');

@@ -30,6 +30,8 @@ interface AccessibilityState {
     value: number;
   };
   reducedMotion?: boolean;
+  keyboardNav?: boolean;
+  largeTargets?: boolean;
 }
 
 // Define a new component for collapsible toggles
@@ -148,6 +150,8 @@ export default function Popup() {
         setTextScaling(updatedState.textScaling || { enabled: false, value: 100 });
         setLineHeight(updatedState.lineHeight || { enabled: false, value: 1.5 });
         setReducedMotion(updatedState.reducedMotion || false);
+        setMotor(updatedState.keyboardNav || false);
+        setLargeTargets(updatedState.largeTargets || false);
       }
       return true;
     };
@@ -162,9 +166,56 @@ export default function Popup() {
         setReadingLine(response.readingLine || false);
         setColorBlind(response.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
         setTextScaling(response.textScaling || { enabled: false, value: 100 });
-        setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
-        setReducedMotion(response.reducedMotion || false);
+        setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });        setReducedMotion(response.reducedMotion || false);
+        setMotor(response.keyboardNav || false);
+        setLargeTargets(response.largeTargets || false);
       }
+      
+      // Query the active tab directly to get the most up-to-date keyboard navigation state
+      chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        if (tabs[0]?.id) {
+          try {
+            chrome.tabs.sendMessage(tabs[0].id, { action: "getKeyboardNavState" }, (tabResponse) => {
+              if (chrome.runtime.lastError) {
+                // Ignore errors - tab might not have our content script
+                return;
+              }
+              
+              if (tabResponse && typeof tabResponse.enabled === 'boolean') {
+                // Update motor state from the active tab
+                setMotor(tabResponse.enabled);
+                
+                // Update background script if there's a mismatch
+                if (response && response.keyboardNav !== tabResponse.enabled) {
+                  chrome.runtime.sendMessage({
+                    action: "updateState",
+                    feature: "keyboardNav",
+                    enabled: tabResponse.enabled
+                  });
+                }
+              }
+            });
+          } catch (e) {
+            // Ignore any errors
+            console.log("Error querying tab keyboard navigation state:", e);
+          }
+          try {
+            chrome.tabs.sendMessage(tabs[0].id, { action: "getKeyboardNavState" }, (response) => {
+              if (chrome.runtime.lastError) {
+                // Ignore errors - tab might not have our content script
+                return;
+              }
+              
+              if (response && typeof response.enabled === 'boolean') {
+                setMotor(response.enabled);
+              }
+            });
+          } catch (e) {
+            // Ignore any errors from tabs that don't have our content script
+            console.log("Error querying tab state:", e);
+          }
+        }
+      });
     });
     
     // Check localStorage for theme preference first
@@ -554,6 +605,32 @@ export default function Popup() {
     });
   };
 
+  // Handler for large targets toggle
+  const toggleLargeTargets = (checked: boolean) => {
+    // First update UI for responsiveness
+    setLargeTargets(checked);
+    
+    // Then send message to background script
+    chrome.runtime.sendMessage({ 
+      action: "toggleFeature",
+      feature: "largeTargets",
+      enabled: checked
+    }, (response) => {
+      if (response && response.status === "success") {
+        // Show success toast
+        toast.success(`Larger Click Targets ${checked ? 'enabled' : 'disabled'}!`, {
+          id: FEATURE_TOAST_ID
+        });
+      } else {
+        // Show error toast and revert UI state
+        toast.error(`Failed to toggle Larger Click Targets`, {
+          id: FEATURE_TOAST_ID
+        });
+        setLargeTargets(!checked);
+      }
+    });
+  };
+
   return (
     <main className="w-80 p-4 space-y-4">
       <div className="flex items-center justify-between">
@@ -754,15 +831,39 @@ export default function Popup() {
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <Keyboard size={16} /> Keyboard-Only Nav
-            </span>
-            <Switch checked={motor} onCheckedChange={handleToggle(setMotor, 'Keyboard-Only Nav')} />
+            </span>            <Switch checked={motor} onCheckedChange={(checked) => {
+              // First update UI immediately
+              setMotor(checked);
+              
+              // Send message to content script to toggle keyboard navigation
+              chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+                const tabId = tabs[0]?.id;
+                if (tabId) {
+                  chrome.tabs.sendMessage(tabId, {
+                    action: "toggleKeyboardNav",
+                    enabled: checked
+                  });
+                }
+              });
+              
+              // Update background script state directly
+              chrome.runtime.sendMessage({
+                action: "updateState",
+                feature: "keyboardNav",
+                enabled: checked
+              });
+              
+              toast.success(`Keyboard-Only Nav ${checked ? 'enabled' : 'disabled'}!`, {
+                id: FEATURE_TOAST_ID
+              });
+            }} />
           </div>
           
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <MousePointerClick size={16} /> Larger Click Targets
             </span>
-            <Switch checked={largeTargets} onCheckedChange={handleToggle(setLargeTargets, 'Larger Click Targets')} />
+            <Switch checked={largeTargets} onCheckedChange={toggleLargeTargets} />
           </div>
           
           <div className="flex items-center justify-between">

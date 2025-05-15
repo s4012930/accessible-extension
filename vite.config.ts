@@ -14,8 +14,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    rollupOptions: {
-      input: {
+    rollupOptions: {      input: {
         background: 'src/background.ts',
         popup: 'popup.html',
         'content-script': 'src/content/content-script.ts',
@@ -26,6 +25,8 @@ export default defineConfig({
         'protanopia': 'src/content/protanopia.css',
         'tritanopia': 'src/content/tritanopia.css',
         'reduced-motion': 'src/content/reduced-motion.css',
+        'keyboard-nav': 'src/content/keyboard-nav.css',
+        'large-targets': 'src/content/large-targets.css',
       },
       output: {
         entryFileNames: '[name].js',
