@@ -78,13 +78,38 @@ const mockSendMessage = vi.fn().mockImplementation((message, callback) => {
   return true;
 });
 
+const mockTabsSendMessage = vi.fn().mockImplementation((tabId, message, callback) => {
+  if (callback && typeof callback === 'function') {
+    // Return a mock response for getKeyboardNavState
+    if (message.action === "getKeyboardNavState") {
+      callback({ enabled: false });
+    } else {
+      callback({ status: "success" });
+    }
+  }
+  return true;
+});
+
+const mockTabsQuery = vi.fn().mockImplementation((queryInfo, callback) => {
+  if (callback && typeof callback === 'function') {
+    // Return a fake tab with ID 1
+    callback([{ id: 1, url: "https://example.com", active: true }]);
+  }
+  return true;
+});
+
 global.chrome = {
   runtime: {
     sendMessage: mockSendMessage,
     onMessage: {
       addListener: vi.fn(),
       removeListener: vi.fn()
-    }
+    },
+    lastError: null
+  },
+  tabs: {
+    query: mockTabsQuery,
+    sendMessage: mockTabsSendMessage
   },
   storage: {
     sync: {

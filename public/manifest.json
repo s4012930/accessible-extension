@@ -41,7 +41,9 @@
           "deuteranopia.css", 
           "protanopia.css", 
           "tritanopia.css",
-          "reduced-motion.css", 
+          "reduced-motion.css",
+          "keyboard-nav.css",
+          "large-targets.css", 
           "fonts/*"
         ],
         "matches": ["<all_urls>"]

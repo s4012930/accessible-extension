@@ -21,6 +21,10 @@ declare global {
   
   // Listen for messages from the extension popup/background
   chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+    if (request.action === "ping") {
+      sendResponse({ status: "pong" });
+      return true;
+    }
     if (request.action === "toggleHighContrast") {
       toggleHighContrast(request.enabled);
       sendResponse({ status: "success" });
@@ -60,6 +64,40 @@ declare global {
     if (request.action === "toggleReducedMotion") {
       toggleReducedMotion(request.enabled);
       sendResponse({ status: "success" });
+      return true;
+    }
+    if (request.action === "toggleLargeTargets") {
+      try {
+        toggleLargeTargets(request.enabled);
+        sendResponse({ status: "success" });
+      } catch (error: any) {
+        console.error("Error in toggleLargeTargets handler:", error);
+        sendResponse({ status: "error", message: error.toString() });
+      }
+      return true;
+    }
+    
+    if (request.action === "toggleKeyboardNav") {
+      try {
+        toggleKeyboardNav(request.enabled);
+        sendResponse({ status: "success" });
+      } catch (error: any) {
+        console.error("Error in toggleKeyboardNav handler:", error);
+        sendResponse({ status: "error", message: error.toString() });
+      }
+      return true;
+    }
+      
+    if (request.action === "getKeyboardNavState") {
+      try {
+        const keyboardNavDOM = !!document.querySelector('link[data-accessibility-keyboard-nav]');
+        const keyboardNavStorage = localStorage.getItem('accessibility-keyboard-nav') === 'true';
+        const keyboardNavEnabled = keyboardNavDOM || keyboardNavStorage;
+        sendResponse({ enabled: keyboardNavEnabled });
+      } catch (error: any) {
+        console.error("Error in getKeyboardNavState handler:", error);
+        sendResponse({ enabled: false, error: error.toString() });
+      }
       return true;
     }
     
@@ -430,16 +468,7 @@ declare global {
     }
     
     // Update global state and debounce storage update
-    debouncedStorageUpdate({ readingLine: enabled });
-  }
-
-  // Helper function to update reading line position
-  function updateReadingLinePosition(e: MouseEvent): void {
-    const readingLine = document.querySelector('.accessibility-reading-line') as HTMLElement;
-    if (readingLine) {
-      readingLine.style.top = `${e.clientY}px`;
-    }
-  }
+    debouncedStorageUpdate({ readingLine: enabled });  }
 
   // Handle visibility change for reading line
   function handleVisibilityChange(): void {
@@ -451,6 +480,14 @@ declare global {
       }
     } else {
       document.removeEventListener('mousemove', updateReadingLinePosition);
+    }
+  }
+
+  // Helper function to update reading line position
+  function updateReadingLinePosition(e: MouseEvent): void {
+    const readingLine = document.querySelector('.accessibility-reading-line') as HTMLElement;
+    if (readingLine) {
+      readingLine.style.top = `${e.clientY}px`;
     }
   }
 
@@ -588,6 +625,153 @@ declare global {
     });
   }
 
+  // Function to toggle keyboard navigation
+  function toggleKeyboardNav(enable: boolean): void {
+    try {
+      // Remove any existing keyboard nav stylesheet to avoid duplicates
+      const existingStylesheets = document.querySelectorAll('link[data-accessibility-keyboard-nav]');
+      existingStylesheets.forEach(sheet => {
+        try {
+          sheet.remove();
+        } catch (err) {
+          // Log error but continue
+          console.error('Failed to remove existing keyboard nav stylesheet:', err);
+        }
+      });
+
+      if (enable) {
+        try {
+          const linkElement = document.createElement('link');
+          linkElement.setAttribute('rel', 'stylesheet');
+          linkElement.setAttribute('data-accessibility-keyboard-nav', 'true');
+          linkElement.setAttribute('href', chrome.runtime.getURL('keyboard-nav.css'));
+          // Insert before other scripts/styles if possible, to ensure high priority
+          if (document.head.firstChild) {
+            document.head.insertBefore(linkElement, document.head.firstChild);
+          } else {
+            document.head.appendChild(linkElement);
+          }
+          console.log('Keyboard navigation enabled successfully on this tab.');
+        } catch (innerError) {
+          console.error('Error enabling keyboard navigation on this tab:', innerError);
+          // Potentially send error back to background or popup if needed
+        }
+      } else {
+        console.log('Keyboard navigation disabled on this tab.');
+      }
+
+      // Store the setting in localStorage for this specific tab's persistence
+      try {
+        localStorage.setItem('accessibility-keyboard-nav', String(enable));
+      } catch (lsError) {
+        console.error('Error setting localStorage for keyboardNav:', lsError);
+      }
+
+      // Update global state via background script (debounced)
+      try {
+        debouncedStorageUpdate({ keyboardNav: enable });
+      } catch (dsuError) {
+        console.error('Error calling debouncedStorageUpdate for keyboardNav:', dsuError);
+      }
+      
+      // Notify background script immediately about the state change for this tab
+      // This allows the background script to manage global state and apply to other tabs if necessary
+      setTimeout(() => {
+        try {
+          chrome.runtime.sendMessage({
+            action: "updateState", // Standard action for background to update its master state
+            feature: "keyboardNav",
+            enabled: enable
+          }).catch(rtMsgError => {
+            // Silently catch errors if background isn't ready or page is unloading
+            console.log("Couldn't notify background script (keyboardNav):", rtMsgError);
+          });
+        } catch (rtError) {
+          console.log("Error sending message to background (keyboardNav):", rtError);
+        }
+      }, 10); // Small delay to ensure other operations complete
+
+    } catch (outerError) {
+      console.error('Critical error in toggleKeyboardNav:', outerError);
+      // Consider sending a message to background/popup about critical failure
+    }
+
+  }
+  // Function to toggle larger click targets
+  function toggleLargeTargets(enabled: boolean): void {
+    // Track if state is changing to avoid redundant operations
+    const currentState = document.documentElement.classList.contains('accessibility-large-targets');
+    if (currentState === enabled) {
+      // No change needed, but ensure storage is consistent
+      localStorage.setItem('accessibility-large-targets', String(enabled));
+      return;
+    }
+    
+    // First handle the class on HTML element
+    if (enabled) {
+      document.documentElement.classList.add('accessibility-large-targets');
+    } else {
+      document.documentElement.classList.remove('accessibility-large-targets');
+    }
+    
+    // Store setting in localStorage
+    localStorage.setItem('accessibility-large-targets', String(enabled));
+      // Add or remove stylesheet for CSS-based large targets
+    let largeTargetsStylesheet = document.querySelector('link[data-accessibility-large-targets]');
+    
+    if (enabled) {
+      if (!largeTargetsStylesheet) {
+        try {
+          // Log to check if we're attempting to enable
+          console.log('Enabling large targets mode...');
+          const cssURL = chrome.runtime.getURL('large-targets.css');
+          console.log('CSS URL:', cssURL);
+          if (!cssURL) {
+            throw new Error('Could not get URL for large-targets.css');
+          }
+          
+          const linkElement = document.createElement('link');
+          linkElement.setAttribute('rel', 'stylesheet');
+          linkElement.setAttribute('data-accessibility-large-targets', 'true');
+          linkElement.setAttribute('href', cssURL);
+          document.head.appendChild(linkElement);
+          console.log('Large targets mode enabled successfully');
+          
+          // Verify that the stylesheet was actually added
+          setTimeout(() => {
+            const verifySheet = document.querySelector('link[data-accessibility-large-targets]');
+            if (!verifySheet) {
+              console.warn('Large targets stylesheet not found after insertion');
+            }
+          }, 100);
+        } catch (error) {
+          console.error('Error applying large targets mode:', error);
+        }
+      }
+    } else {
+      // Remove the stylesheet when disabled
+      if (largeTargetsStylesheet) {
+        largeTargetsStylesheet.remove();
+      }
+    }
+    
+    // Update global state and debounce storage update
+    debouncedStorageUpdate({ largeTargets: enabled });
+      // Immediately notify background script about state change
+    try {
+      chrome.runtime.sendMessage({
+        action: "updateState",
+        feature: "largeTargets",
+        enabled: enabled
+      }).catch(() => {
+        // Ignore errors if background isn't ready
+      });
+    } catch (err) {
+      // Handle any exceptions that might occur when sending messages
+      console.log("Error sending largeTargets update to background:", err);
+    }
+  }
+
   // Check if accessibility features were previously enabled on this page
   function initAccessibilitySettings(): void {
     // First check Chrome storage for global settings
@@ -693,6 +877,13 @@ declare global {
         } else if (globalSettings.reducedMotion === false) {
           toggleReducedMotion(false);
         }
+        
+        // Apply large targets if enabled globally
+        if (globalSettings.largeTargets === true) {
+          toggleLargeTargets(true);
+        } else if (globalSettings.largeTargets === false) {
+          toggleLargeTargets(false);
+        }
       } else {
         // Fall back to localStorage if no global settings found
         
@@ -771,7 +962,17 @@ declare global {
         if (reducedMotionEnabled) {
           toggleReducedMotion(true);
         }
+          // Apply keyboard navigation settings from localStorage
+        const keyboardNavEnabled = localStorage.getItem('accessibility-keyboard-nav') === 'true';
+        if (keyboardNavEnabled) {
+          toggleKeyboardNav(true);
+        }
         
+        // Apply large targets settings from localStorage
+        const largeTargetsEnabled = localStorage.getItem('accessibility-large-targets') === 'true';
+        if (largeTargetsEnabled) {
+          toggleLargeTargets(true);
+        }
         // Update global storage with local settings - ensure colourblind state reflects that only one filter is active
         const colorBlindState = {
           enabled: deuteranopiaEnabled || protanopiaEnabled || tritanopiaEnabled,
@@ -788,7 +989,9 @@ declare global {
             readingLine: readingLineEnabled,
             textScaling: { enabled: textScalingEnabled, value: textScalingValue },
             lineHeight: { enabled: lineHeightEnabled, value: lineHeightValue },
-            reducedMotion: reducedMotionEnabled
+            reducedMotion: reducedMotionEnabled,
+            keyboardNav: keyboardNavEnabled,
+            largeTargets: largeTargetsEnabled
           }
         });
       }
@@ -806,8 +1009,12 @@ declare global {
       const dyslexiaFontEnabled = document.documentElement.classList.contains('accessibility-dyslexia-font');
       const readingLineEnabled = !!document.querySelector('.accessibility-reading-line-container');
       const textScalingEnabled = localStorage.getItem('accessibility-text-scaling-enabled') === 'true';
-      const lineHeightEnabled = localStorage.getItem('accessibility-line-height-enabled') === 'true';
+      const lineHeightEnabled = localStorage.getItem('accessibility-line-height-enabled') === 'true';      
       const reducedMotionEnabled = document.documentElement.classList.contains('accessibility-reduced-motion');
+      const keyboardNavDOM = !!document.querySelector('link[data-accessibility-keyboard-nav]');
+      const keyboardNavStorage = localStorage.getItem('accessibility-keyboard-nav') === 'true';
+      const keyboardNavEnabled = keyboardNavDOM || keyboardNavStorage;
+      const largeTargetsEnabled = document.documentElement.classList.contains('accessibility-large-targets');
       
       // Check colourblind modes
       const deuteranopiaEnabled = document.documentElement.classList.contains('accessibility-deuteranopia');
@@ -847,9 +1054,7 @@ declare global {
         action: "updateState",
         feature: "textScaling",
         enabled: textScalingEnabled
-      });
-
-      chrome.runtime.sendMessage({
+      });      chrome.runtime.sendMessage({
         action: "updateState",
         feature: "lineHeight",
         enabled: lineHeightEnabled
@@ -857,8 +1062,20 @@ declare global {
 
       chrome.runtime.sendMessage({
         action: "updateState",
+        feature: "largeTargets",
+        enabled: largeTargetsEnabled
+      });
+
+      chrome.runtime.sendMessage({
+        action: "updateState",
         feature: "reducedMotion",
         enabled: reducedMotionEnabled
+      });
+
+      chrome.runtime.sendMessage({
+        action: "updateState",
+        feature: "keyboardNav",
+        enabled: keyboardNavEnabled
       });
     }, 100);
   }

@@ -21,6 +21,11 @@ interface AccessibilityState {
     value: number;  // 1.5 = default (middle), can be decreased or increased
   };
   reducedMotion: boolean;
+  keyboardNav: boolean;
+  largeTargets: {
+    enabled: boolean;
+    value: number;  // 1.5 = default (middle), can be decreased or increased
+  };
   // Add other accessibility features as needed
 }
 
@@ -42,7 +47,12 @@ const state: AccessibilityState = {
     enabled: false,
     value: 1.5    // Default line height
   },
-  reducedMotion: false
+  reducedMotion: false,
+  keyboardNav: false,
+  largeTargets: {
+    enabled: false,
+    value: 1.5    // Default scale factor (1.5x)
+  }
 };
 
 // Listen for messages from the popup
@@ -109,6 +119,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     state.textScaling.enabled = false;
     state.lineHeight.enabled = false;
     state.reducedMotion = false;
+    state.keyboardNav = false;
+    state.largeTargets.enabled = false;
     
     // Save state to storage immediately
     chrome.storage.sync.set({ accessibilityState: state });
@@ -123,7 +135,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       applyColorBlindToAllTabs("tritanopia", false),
       applyTextScalingToAllTabs(false, state.textScaling.value),
       applyLineHeightToAllTabs(false, state.lineHeight.value),
-      applyReducedMotionToAllTabs(false)
+      applyReducedMotionToAllTabs(false),
+      applyKeyboardNavToAllTabs(false),
+      applyLargeTargetsToAllTabs(false)
     ]).then(() => {
       // Send response only after all operations complete
       sendResponse({ status: "success", state });
@@ -338,6 +352,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       
       sendResponse({ status: "success", state });
       return true;
+    }    if (feature === "largeTargets") {
+      state.largeTargets.enabled = enabled;
+      
+      if (enabled) {
+        // Apply the default value (1.5) when enabled
+        state.largeTargets.value = 1.5;
+      }
+      
+      // Apply to all tabs
+      applyLargeTargetsToAllTabs(enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state }, () => {
+        // Ensure popup gets updated state
+        chrome.runtime.sendMessage({ 
+          action: "stateUpdated", 
+          state: state 
+        }).catch(() => {
+          // Ignore errors if popup is not open
+        });
+      });
+      
+      sendResponse({ status: "success", state });
+      return true;
     }
     // Add other features here in the future
   }
@@ -403,11 +441,49 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Ignore errors if popup is not open to receive the message
       });
       return true;
-    }
-
-    if (request.feature === "reducedMotion") {
+    }    if (request.feature === "reducedMotion") {
       state.reducedMotion = request.enabled;
       chrome.storage.sync.set({ accessibilityState: state });
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      return true;
+    }    if (request.feature === "keyboardNav") {
+      if (typeof request.enabled === 'boolean' && state.keyboardNav !== request.enabled) {
+        state.keyboardNav = request.enabled;
+        // Save state to storage
+        chrome.storage.sync.set({ accessibilityState: state }, () => {
+          if (chrome.runtime.lastError) {
+            console.error("Error saving keyboardNav state to chrome.storage.sync:", chrome.runtime.lastError);
+          } else {
+            console.log("keyboardNav state saved to chrome.storage.sync:", state.keyboardNav);
+            // Propagate this change to all tabs
+            applyKeyboardNavToAllTabs(state.keyboardNav);
+          }
+        });
+      }
+      // Broadcast state change to popup if it's open, regardless of whether it changed,
+      // as the request might have originated from a content script state sync.
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      // sendResponse is not needed here as this is a state update, not a direct request needing a response to the sender.
+      return true;
+    }
+      if (request.feature === "largeTargets") {
+      state.largeTargets.enabled = request.enabled;
+      if (request.value !== undefined) {
+        state.largeTargets.value = request.value;
+      }
+      chrome.storage.sync.set({ accessibilityState: state });
+      
       // Broadcast state change to popup if it's open
       chrome.runtime.sendMessage({ 
         action: "stateUpdated", 
@@ -437,6 +513,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
     // Apply to all tabs
     applyLineHeightToAllTabs(state.lineHeight.enabled, request.value);
+    
+    // Save state to storage for persistence
+    chrome.storage.sync.set({ accessibilityState: state });
+    sendResponse({ status: "success", state });
+    return true;
+  }
+  
+  if (request.action === "updateLargeTargets") {
+    state.largeTargets.value = request.value;
+    
+    // Apply to all tabs
+    applyLargeTargetsToAllTabs(state.largeTargets.enabled);
     
     // Save state to storage for persistence
     chrome.storage.sync.set({ accessibilityState: state });
@@ -809,6 +897,112 @@ async function applyReducedMotionToAllTabs(enabled: boolean): Promise<void> {
   }
 }
 
+// Apply keyboard navigation to all tabs
+async function applyKeyboardNavToAllTabs(enable: boolean): Promise<void> {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.id && tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+        const tabId = tab.id;
+        chrome.tabs.sendMessage(tabId, { action: "ping" }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log(`Content script not found in tab ${tabId} for keyboardNav. Injecting.`);
+            chrome.scripting.executeScript({
+              target: { tabId: tabId },
+              files: ['content-script.js']
+            }).then(() => {
+              console.log(`Content script injected in tab ${tabId} for keyboardNav. Applying state.`);
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tabId, {
+                  action: "toggleKeyboardNav",
+                  enabled: enable
+                }).catch(err => console.warn(`Error sending toggleKeyboardNav to tab ${tabId} after injection:`, err.message));
+              }, 100);
+            }).catch(err => console.error(`Failed to inject content script in tab ${tabId} for keyboardNav:`, err.message));
+          } else {
+            if (response && response.status === "pong") {
+              console.log(`Content script active in tab ${tabId}. Sending toggleKeyboardNav.`);
+              chrome.tabs.sendMessage(tabId, {
+                action: "toggleKeyboardNav",
+                enabled: enable
+              }).catch(err => console.warn(`Error sending toggleKeyboardNav to active tab ${tabId}:`, err.message));
+            } else {
+               console.warn(`Content script in tab ${tabId} responded unexpectedly to ping or no response status.`);
+            }
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Error in applyKeyboardNavToAllTabs:", error);
+  }
+}
+
+// Function to apply large targets to all tabs
+async function applyLargeTargetsToAllTabs(enabled: boolean): Promise<void> {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (!tab.id || !tab.url || !tab.url.startsWith('http')) continue;
+      const tabId = tab.id;
+      
+      // Send message to content script with proper error handling
+      try {
+        chrome.tabs.sendMessage(tabId, {
+          action: "toggleLargeTargets",
+          enabled
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log(`Tab ${tabId} not ready for large targets, injecting content script first`);
+            // Content script not ready, inject it first and retry
+            chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['content-script.js']
+            }).then(() => {
+              // Also inject CSS if enabled
+              if (enabled) {
+                return chrome.scripting.insertCSS({
+                  target: { tabId },
+                  files: ["/large-targets.css"]
+                }).catch(err => console.log(`CSS injection error for tab ${tabId}:`, err));
+              }
+            }).then(() => {              // Retry sending message after script is injected with a short delay
+              setTimeout(() => {
+                try {
+                  chrome.tabs.sendMessage(tabId, {
+                    action: "toggleLargeTargets",
+                    enabled
+                  }, (retryResponse) => {
+                    // Check for lastError without accessing it directly
+                    if (chrome.runtime.lastError) {
+                      console.log(`Retry still failed for tab ${tabId}, but continuing: ${chrome.runtime.lastError.message}`);
+                    } else if (retryResponse && retryResponse.status === "success") {
+                      console.log(`Successfully applied large targets=${enabled} to tab ${tabId} on retry`);
+                    }
+                  });
+                } catch (retryErr) {
+                  // Just log and continue if this fails too
+                  console.log(`Retry exception for tab ${tabId}:`, retryErr);
+                }
+              }, 300); // Increased delay to give more time for content script to initialize
+            }).catch(err => {
+              console.log(`Script injection failed for tab ${tabId}:`, err);
+              // The tab might not support content scripts (e.g. chrome:// URLs)
+            });
+          } else if (response && response.status === "success") {
+            console.log(`Successfully applied large targets=${enabled} to tab ${tabId}`);
+          }
+        });
+      } catch (err) {
+        // This catch is just a safeguard, most errors should be caught by the callback
+        console.log(`Error applying large targets to tab ${tabId}:`, err);
+      }
+    }
+  } catch (error) {
+    console.log(`Error getting tabs:`, error);
+  }
+}
+
 // Initialize by loading state from storage
 chrome.storage.sync.get("accessibilityState", (result) => {
   if (result.accessibilityState) {
@@ -897,6 +1091,31 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         });
       } catch (err) {
         console.error("Error inserting reduced motion CSS:", err);
+      }
+    }
+      // Apply keyboard navigation if enabled
+    if (state.keyboardNav) {
+      try {
+        chrome.tabs.sendMessage(activeInfo.tabId, {
+          action: "toggleKeyboardNav",
+          enabled: true
+        }).catch(err => console.error("Error applying keyboard navigation:", err));
+      } catch (err) {
+        console.error("Error applying keyboard navigation:", err);
+      }
+    }    if (state.largeTargets.enabled) {
+      try {
+        await chrome.scripting.insertCSS({
+          target: { tabId: activeInfo.tabId },
+          files: ["/large-targets.css"]
+        });
+        chrome.tabs.sendMessage(activeInfo.tabId, {
+          action: "toggleLargeTargets",
+          enabled: true,
+          value: state.largeTargets.value
+        }).catch(err => console.error("Error applying large targets:", err));
+      } catch (err) {
+        console.error("Error applying large targets:", err);
       }
     }
   } catch (err) {
@@ -990,6 +1209,52 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
           action: "toggleReducedMotion",
           enabled: true
         }).catch(err => console.log("Non-critical: Error applying reduced motion on page load:", err));
+      }
+        // Apply large targets if enabled
+      if (state.largeTargets.enabled) {
+        // First ensure CSS is loaded
+        chrome.scripting.insertCSS({
+          target: { tabId },
+          files: ["/large-targets.css"]
+        }).then(() => {
+          chrome.tabs.sendMessage(tabId, {
+            action: "toggleLargeTargets",
+            enabled: true,
+            value: state.largeTargets.value
+          }).catch(err => console.log("Non-critical: Error applying large targets on page load:", err));
+        }).catch(err => console.log("Non-critical: Error inserting large targets CSS:", err));
+      }
+      
+      // Apply keyboard navigation if enabled
+      if (state.keyboardNav) {
+        console.log(`Tab ${tabId} updated. Applying keyboardNav: ${state.keyboardNav}`);
+        // Similar logic to applyKeyboardNavToAllTabs but for a single tab
+        chrome.tabs.sendMessage(tabId, { action: "ping" }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log(`Content script not found in updated tab ${tabId}. Injecting for keyboardNav.`);
+            chrome.scripting.executeScript({
+              target: { tabId: tabId },
+              files: ['content-script.js']
+            }).then(() => {
+              console.log(`Content script injected in updated tab ${tabId}. Applying keyboardNav state.`);
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tabId, {
+                  action: "toggleKeyboardNav",
+                  enabled: state.keyboardNav
+                }).catch(err => console.warn(`Error sending toggleKeyboardNav to updated tab ${tabId} after injection:`, err.message));
+              }, 100);
+            }).catch(err => console.error(`Failed to inject content script in updated tab ${tabId} for keyboardNav:`, err.message));
+          } else {
+            if (response && response.status === "pong") {
+               chrome.tabs.sendMessage(tabId, {
+                action: "toggleKeyboardNav",
+                enabled: state.keyboardNav
+              }).catch(err => console.warn(`Error sending toggleKeyboardNav to updated tab ${tabId}:`, err.message));
+            } else {
+              console.warn(`Content script in updated tab ${tabId} responded unexpectedly to ping.`);
+            }
+          }
+        });
       }
     }).catch(err => {
       console.log(`Error injecting content script into tab ${tabId} (this is normal for some pages):`, err);

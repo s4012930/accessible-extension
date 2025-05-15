@@ -1,0 +1,39 @@
+/* Large Targets CSS */
+/* This makes clickable elements on the page larger */
+
+/* Define default scale if not already set */
+:root {
+  --large-targets-scale: 1.5;
+}
+
+/* Target standard clickable elements */
+a, button, input[type="button"], input[type="submit"], input[type="reset"],
+[role="button"], .button, [class*="btn"], [class*="button"],
+select, input[type="checkbox"], input[type="radio"] {
+  transform: scale(var(--large-targets-scale));
+  transform-origin: center;
+  margin: 0.5em;
+  max-width: calc(100% - 1em);
+  z-index: 1; /* Ensure the enlarged element is above others */
+  transition: transform 0.2s ease-in-out; /* Smooth transition */
+}
+
+/* Make sure checkboxes and radio buttons remain usable */
+input[type="checkbox"], input[type="radio"] {
+  min-width: calc(1em * var(--large-targets-scale));
+  min-height: calc(1em * var(--large-targets-scale));
+}
+
+/* Increase target area for icon buttons and small clickable elements */
+button:not([class*="btn"]):not([class*="button"]),
+a:not([class*="btn"]):not([class*="button"]) {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.5em;
+}
+
+/* Ensure tooltips and popup menus are still usable */
+[role="tooltip"], [role="menu"], [role="dialog"], .tooltip, .popover, .dropdown-menu {
+  transform: none;
+  margin: auto;
+}
