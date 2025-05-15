@@ -65,11 +65,15 @@ declare global {
       toggleReducedMotion(request.enabled);
       sendResponse({ status: "success" });
       return true;
-    }
-    if (request.action === "toggleLargeTargets") {
+    }    if (request.action === "toggleLargeTargets") {
       try {
+        console.log('Large targets request received:', request.enabled);
         toggleLargeTargets(request.enabled);
-        sendResponse({ status: "success" });
+        sendResponse({ 
+          status: "success", 
+          enabled: request.enabled,
+          value: 1.5  // Return the default value
+        });
       } catch (error: any) {
         console.error("Error in toggleLargeTargets handler:", error);
         sendResponse({ status: "error", message: error.toString() });
@@ -699,6 +703,8 @@ declare global {
   }
   // Function to toggle larger click targets
   function toggleLargeTargets(enabled: boolean): void {
+    console.log(`Toggling large targets: ${enabled ? 'ON' : 'OFF'}`);
+    
     // Track if state is changing to avoid redundant operations
     const currentState = document.documentElement.classList.contains('accessibility-large-targets');
     if (currentState === enabled) {
@@ -716,7 +722,8 @@ declare global {
     
     // Store setting in localStorage
     localStorage.setItem('accessibility-large-targets', String(enabled));
-      // Add or remove stylesheet for CSS-based large targets
+    
+    // Add or remove stylesheet for CSS-based large targets
     let largeTargetsStylesheet = document.querySelector('link[data-accessibility-large-targets]');
     
     if (enabled) {
@@ -737,6 +744,9 @@ declare global {
           document.head.appendChild(linkElement);
           console.log('Large targets mode enabled successfully');
           
+          // Set the CSS variable for scaling
+          document.documentElement.style.setProperty('--large-targets-scale', '1.5');
+          
           // Verify that the stylesheet was actually added
           setTimeout(() => {
             const verifySheet = document.querySelector('link[data-accessibility-large-targets]');
@@ -750,19 +760,53 @@ declare global {
       }
     } else {
       // Remove the stylesheet when disabled
-      if (largeTargetsStylesheet) {
-        largeTargetsStylesheet.remove();
-      }
+      console.log("Removing large targets stylesheets...");
+      
+      // Remove all stylesheets related to large targets, not just the one we found initially
+      document.querySelectorAll('link[data-accessibility-large-targets]').forEach(el => {
+        try {
+          el.remove();
+          console.log("Removed a large targets stylesheet");
+        } catch (err) {
+          console.error("Error removing stylesheet:", err);
+        }
+      });
+      
+      // Remove the CSS variable for scaling
+      document.documentElement.style.removeProperty('--large-targets-scale');
+      
+      // Double check removal with a short delay
+      setTimeout(() => {
+        const remainingStylesheets = document.querySelectorAll('link[data-accessibility-large-targets]');
+        if (remainingStylesheets.length > 0) {
+          console.warn(`Found ${remainingStylesheets.length} large targets stylesheets that weren't removed - forcing removal again`);
+          remainingStylesheets.forEach(el => {
+            try {
+              el.remove();
+            } catch (err) {
+              console.error("Error in second removal attempt:", err);
+            }
+          });
+        } else {
+          console.log("All large targets stylesheets removed successfully");
+        }
+      }, 100);
     }
+      // Update global state and debounce storage update
+    debouncedStorageUpdate({ 
+      largeTargets: { 
+        enabled: enabled,
+        value: 1.5  // Use default value
+      } 
+    });
     
-    // Update global state and debounce storage update
-    debouncedStorageUpdate({ largeTargets: enabled });
-      // Immediately notify background script about state change
+    // Immediately notify background script about state change
     try {
       chrome.runtime.sendMessage({
         action: "updateState",
         feature: "largeTargets",
-        enabled: enabled
+        enabled: enabled,
+        value: 1.5  // Include value to match background script expectations
       }).catch(() => {
         // Ignore errors if background isn't ready
       });
