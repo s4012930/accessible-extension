@@ -19,6 +19,9 @@ const cssFiles = [
   'reduced-motion.css',
   'keyboard-nav.css',
   'large-targets.css',
+  'custom-cursor.css',
+  'auto-scroll.css',
+  'hover-controls.css',
 ];
 
 console.log('Ensuring all CSS files are properly copied to the dist directory...');

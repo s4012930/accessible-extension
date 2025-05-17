@@ -105,6 +105,51 @@ declare global {
       return true;
     }
     
+    if (request.action === "toggleCustomCursor") {
+      try {
+        console.log('Custom cursor request received:', request.enabled);
+        toggleCustomCursor(request.enabled);
+        sendResponse({ 
+          status: "success", 
+          enabled: request.enabled
+        });
+      } catch (error: any) {
+        console.error("Error in toggleCustomCursor handler:", error);
+        sendResponse({ status: "error", message: error.toString() });
+      }      return true;
+    }    if (request.action === "toggleAutoScroll") {
+      try {
+        // Just toggle the feature directly
+        toggleAutoScroll(request.enabled);
+        
+        // Send response immediately after toggle
+        sendResponse({ 
+          status: "success", 
+          enabled: request.enabled 
+        });
+      } catch (error) {
+        console.error("Error in toggleAutoScroll handler:", error);
+        sendResponse({ status: "error", message: error instanceof Error ? error.message : String(error) });
+      }
+      return true;
+    }
+      if (request.action === "toggleHoverControls") {
+      try {
+        console.log('Hover controls request received:', request.enabled);
+        toggleHoverControls(request.enabled);
+        // Always send a successful response regardless of internal implementation details
+        sendResponse({ 
+          status: "success", 
+          enabled: request.enabled 
+        });
+        return true;
+      } catch (error: any) {
+        console.error("Error in toggleHoverControls handler:", error);
+        sendResponse({ status: "error", message: error.toString() });
+        return true;
+      }
+    }
+    
     // Add other accessibility toggles here in the future
     return false;
   });
@@ -629,7 +674,9 @@ declare global {
     });
   }
 
-  // Function to toggle keyboard navigation
+  // Global variables for keyboard navigation auto-click feature
+  let keyboardFocusTimer: number | null = null;
+  
   function toggleKeyboardNav(enable: boolean): void {
     try {
       // Remove any existing keyboard nav stylesheet to avoid duplicates
@@ -642,6 +689,12 @@ declare global {
           console.error('Failed to remove existing keyboard nav stylesheet:', err);
         }
       });
+      
+      // Remove keyboardFocusTimer if it exists
+      if (keyboardFocusTimer) {
+        clearTimeout(keyboardFocusTimer);
+        keyboardFocusTimer = null;
+      }
 
       if (enable) {
         try {
@@ -655,6 +708,7 @@ declare global {
           } else {
             document.head.appendChild(linkElement);
           }
+          
           console.log('Keyboard navigation enabled successfully on this tab.');
         } catch (innerError) {
           console.error('Error enabling keyboard navigation on this tab:', innerError);
@@ -816,6 +870,407 @@ declare global {
     }
   }
 
+  // Function to toggle custom cursor  
+  function toggleCustomCursor(enable: boolean): void {
+    console.log(`Toggling custom cursor: ${enable ? 'ON' : 'OFF'}`);
+    
+    try {
+      // Track if state is changing to avoid redundant operations
+      const currentState = document.documentElement.classList.contains('accessibility-custom-cursor');
+      if (currentState === enable) {
+        // No change needed, but ensure storage is consistent
+        localStorage.setItem('accessibility-custom-cursor', String(enable));
+        return;
+      }
+      
+      // First handle the class on HTML element
+      if (enable) {
+        document.documentElement.classList.add('accessibility-custom-cursor');
+      } else {
+        document.documentElement.classList.remove('accessibility-custom-cursor');
+      }
+      
+      // Store setting in localStorage
+      localStorage.setItem('accessibility-custom-cursor', String(enable));
+      
+      // Add or remove stylesheet for CSS-based custom cursor
+      let customCursorStylesheet = document.querySelector('link[data-accessibility-custom-cursor]');
+      
+      if (enable) {
+        if (!customCursorStylesheet) {
+          console.log('Enabling custom cursor mode...');
+          // Debug information about available cursor files
+          console.log('Checking cursor files:');
+          ['cursors/default.cur', 'cursors/pointer.cur', 'cursors/text.cur'].forEach(cursorPath => {
+            const url = chrome.runtime.getURL(cursorPath);
+            console.log(`- ${cursorPath}: ${url}`);
+          });
+          
+          const cssURL = chrome.runtime.getURL('custom-cursor.css');
+          console.log('CSS URL:', cssURL);
+          if (!cssURL) {
+            console.error('Could not get URL for custom-cursor.css');
+            return;
+          }
+          
+          const linkElement = document.createElement('link');
+          linkElement.setAttribute('rel', 'stylesheet');
+          linkElement.setAttribute('data-accessibility-custom-cursor', 'true');
+          linkElement.setAttribute('href', cssURL);
+          document.head.appendChild(linkElement);
+          console.log('Custom cursor mode enabled successfully');
+        }
+      } else {
+        // Remove the stylesheet when disabled
+        console.log("Removing custom cursor stylesheets...");
+        
+        document.querySelectorAll('link[data-accessibility-custom-cursor]').forEach(el => {
+          try {
+            el.remove();
+            console.log("Removed a custom cursor stylesheet");
+          } catch (err) {
+            console.error("Error removing stylesheet:", err);
+          }
+        });
+      }
+      
+      // Double check removal with a short delay
+      setTimeout(() => {
+        const remainingStylesheets = document.querySelectorAll('link[data-accessibility-custom-cursor]');
+        if (remainingStylesheets.length > 0) {
+          console.warn(`Found ${remainingStylesheets.length} custom cursor stylesheets that weren't removed - forcing removal again`);
+          remainingStylesheets.forEach(el => {
+            try {
+              el.remove();
+            } catch (err) {
+              console.error("Error in second removal attempt:", err);
+            }
+          });        } else {
+          console.log("All custom cursor stylesheets removed successfully");
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Error in toggleCustomCursor function:', error);
+    }
+    
+    // Update global state and debounce storage update
+    debouncedStorageUpdate({ 
+      customCursor: enable
+    });
+    
+    // Immediately notify background script about state change
+    try {
+      chrome.runtime.sendMessage({
+        action: "updateState",
+        feature: "customCursor",
+        enabled: enable
+      }).catch(() => {
+        // Ignore errors if background isn't ready
+      });
+    } catch (err) {
+      console.log("Error sending customCursor update to background:", err);
+    }
+  }
+
+  // Auto-scroll functionality    
+  function toggleAutoScroll(enable: boolean): void {
+    console.log(`Toggling auto-scroll: ${enable ? 'ON' : 'OFF'}`);
+    
+    try {
+      // Debug logging to help investigate issues
+      console.log('Auto-scroll toggle function called with enable =', enable);
+      console.log('HTML element classes before toggle:', document.documentElement.classList.toString());
+      
+      // Track if state is changing to avoid redundant operations
+      const currentState = document.documentElement.classList.contains('accessibility-auto-scroll');
+      console.log('Current auto-scroll state detected as:', currentState);
+      
+      if (currentState === enable) {
+        // No change needed, but ensure storage is consistent
+        console.log('No state change needed, state already matches requested state');
+        localStorage.setItem('accessibility-auto-scroll', String(enable));
+        
+        // Update global state via Chrome storage even if no visual change
+        updateAutoScrollStorage(enable);
+        return;
+      }
+      
+      // First handle the class on HTML element
+      if (enable) {
+        document.documentElement.classList.add('accessibility-auto-scroll');
+      } else {
+        document.documentElement.classList.remove('accessibility-auto-scroll');
+      }
+      
+      // Store setting in localStorage
+      localStorage.setItem('accessibility-auto-scroll', String(enable));
+      
+      // Add or remove stylesheet for auto-scroll
+      let autoScrollStylesheet = document.querySelector('link[data-accessibility-auto-scroll]');
+      
+      if (enable) {
+        if (!autoScrollStylesheet) {
+          console.log('Enabling auto-scroll mode...');
+          
+          const cssURL = chrome.runtime.getURL('auto-scroll.css');
+          console.log('Auto-scroll CSS URL:', cssURL);
+          if (!cssURL) {
+            console.error('Could not get URL for auto-scroll.css');
+            return;
+          }
+          
+          const linkElement = document.createElement('link');
+          linkElement.setAttribute('rel', 'stylesheet');
+          linkElement.setAttribute('data-accessibility-auto-scroll', 'true');
+          linkElement.setAttribute('href', cssURL);          
+          document.head.appendChild(linkElement);
+          
+          // Create and add the scroll zones to the page
+          createScrollZones();
+          
+          // Show a message to the user
+          showTemporaryMessage('Auto-scroll feature enabled', 3000);
+          
+          console.log('Auto-scroll mode enabled successfully');
+        }
+      } else {
+        // Remove the stylesheet when disabled
+        console.log("Removing auto-scroll stylesheets and zones...");
+        
+        document.querySelectorAll('link[data-accessibility-auto-scroll]').forEach(el => {
+          try {
+            el.remove();
+            console.log("Removed auto-scroll stylesheet");
+          } catch (err) {
+            console.error("Error removing stylesheet:", err);
+          }
+        });
+        
+        // Remove scroll zones
+        removeScrollZones();
+        
+        // Show a message to the user
+        showTemporaryMessage('Auto-scroll feature disabled', 3000);
+      }
+      
+      // Update global state and debounce storage update
+      debouncedStorageUpdate({ 
+        autoScroll: enable
+      });
+      
+      // Immediately notify background script about state change
+      try {
+        chrome.runtime.sendMessage({
+          action: "updateState",
+          feature: "autoScroll",
+          enabled: enable
+        }).catch(() => {
+          // Ignore errors if background isn't ready
+        });
+      } catch (err) {
+        console.log("Error sending autoScroll update to background:", err);
+      }
+    } catch (error) {
+      console.error('Error in toggleAutoScroll function:', error);
+    }
+  }
+  
+  // Helper function to update Chrome storage with auto-scroll state
+  function updateAutoScrollStorage(enabled: boolean): void {
+    chrome.storage.sync.get("accessibilityState", (result) => {
+      const state = result.accessibilityState || {};
+      state.autoScroll = enabled;
+      
+      chrome.storage.sync.set({ 
+        accessibilityState: state 
+      }, () => {
+        if (chrome.runtime.lastError) {
+          console.error('Error updating storage:', chrome.runtime.lastError);
+        } else {
+          console.log('Auto-scroll state updated in Chrome storage:', enabled);
+        }
+      });
+    });
+  }
+  
+  // Helper functions for auto-scroll
+  let scrollInterval: number | null = null;
+  const SCROLL_SPEED = 10; // pixels per interval
+  const SCROLL_INTERVAL_MS = 16; // roughly 60fps
+    function createScrollZones() {
+    // Remove any existing scroll zones first
+    removeScrollZones();
+    
+    // Create top scroll zone
+    const topZone = document.createElement('div');
+    topZone.className = 'accessibility-auto-scroll-zone top';
+    topZone.setAttribute('data-accessibility-auto-scroll-zone', 'top');
+    
+    // Debug text
+    const topDebugText = document.createElement('div');
+    topDebugText.textContent = "Scroll Up Zone";
+    topDebugText.style.position = 'absolute';
+    topDebugText.style.top = '5px';
+    topDebugText.style.left = '10px';
+    topDebugText.style.color = 'white';
+    topDebugText.style.fontSize = '12px';
+    topDebugText.style.fontWeight = 'bold';
+    topDebugText.style.textShadow = '0 0 2px black';
+    topZone.appendChild(topDebugText);
+    
+    // Create bottom scroll zone
+    const bottomZone = document.createElement('div');
+    bottomZone.className = 'accessibility-auto-scroll-zone bottom';
+    bottomZone.setAttribute('data-accessibility-auto-scroll-zone', 'bottom');
+    
+    // Debug text
+    const bottomDebugText = document.createElement('div');
+    bottomDebugText.textContent = "Scroll Down Zone";
+    bottomDebugText.style.position = 'absolute';
+    bottomDebugText.style.bottom = '5px';
+    bottomDebugText.style.left = '10px';
+    bottomDebugText.style.color = 'white';
+    bottomDebugText.style.fontSize = '12px';
+    bottomDebugText.style.fontWeight = 'bold';
+    bottomDebugText.style.textShadow = '0 0 2px black';
+    bottomZone.appendChild(bottomDebugText);
+    
+    // Add event listeners with console logging
+    topZone.addEventListener('mouseenter', () => {
+      console.log('Mouse entered top scroll zone');
+      startScrolling('up');
+    });
+    
+    topZone.addEventListener('mouseleave', () => {
+      console.log('Mouse left top scroll zone');
+      stopScrolling();
+    });
+    
+    bottomZone.addEventListener('mouseenter', () => {
+      console.log('Mouse entered bottom scroll zone');
+      startScrolling('down');
+    });
+    
+    bottomZone.addEventListener('mouseleave', () => {
+      console.log('Mouse left bottom scroll zone');
+      stopScrolling();
+    });
+    
+    // Add to DOM
+    document.body.appendChild(topZone);
+    document.body.appendChild(bottomZone);
+    
+    console.log('Auto-scroll zones created and attached to DOM');
+  }
+  
+  function removeScrollZones() {
+    // Stop any active scrolling
+    stopScrolling();
+    
+    // Remove the zones from DOM
+    document.querySelectorAll('[data-accessibility-auto-scroll-zone]').forEach(el => {
+      try {
+        el.remove();
+      } catch (err) {
+        console.error("Error removing scroll zone:", err);
+      }
+    });
+    
+    console.log('Auto-scroll zones removed');
+  }
+  function startScrolling(direction: 'up' | 'down') {
+    // Clear any existing interval first
+    stopScrolling();
+    
+    console.log(`Starting auto-scroll ${direction}`);
+    
+    // Add indicator class to body to show active scrolling
+    document.body.classList.add('accessibility-auto-scrolling');
+    document.body.classList.add(`accessibility-auto-scrolling-${direction}`);
+    
+    // Start with slightly faster speed for better feedback
+    const initialSpeed = SCROLL_SPEED * 1.5;
+    
+    // Start a new scroll interval with acceleration
+    let currentSpeed = initialSpeed;
+    const maxSpeed = SCROLL_SPEED * 2.5;
+    
+    scrollInterval = window.setInterval(() => {
+      if (direction === 'up') {
+        window.scrollBy({
+          top: -currentSpeed,
+          behavior: 'auto'
+        });
+      } else {
+        window.scrollBy({
+          top: currentSpeed,
+          behavior: 'auto'
+        });
+      }
+      
+      // Accelerate scrolling gradually up to max speed
+      if (currentSpeed < maxSpeed) {
+        currentSpeed = Math.min(currentSpeed * 1.05, maxSpeed);
+      }
+    }, SCROLL_INTERVAL_MS);
+    
+    // Use our helper function to show a notification
+    showTemporaryMessage(`Auto-scrolling ${direction}`, 2000);
+  }
+  
+  function stopScrolling() {
+    if (scrollInterval) {
+      // Remove indicator classes
+      document.body.classList.remove('accessibility-auto-scrolling');
+      document.body.classList.remove('accessibility-auto-scrolling-up');
+      document.body.classList.remove('accessibility-auto-scrolling-down');
+      window.clearInterval(scrollInterval);
+      scrollInterval = null;
+      console.log('Auto-scroll stopped');
+    }
+  }
+  // Helper function to show a temporary message on the page
+  function showTemporaryMessage(message: string, duration: number = 3000): void {
+    try {
+      // Remove any existing messages
+      const existingMessage = document.querySelector('.accessibility-auto-scroll-notification');
+      if (existingMessage && existingMessage.parentNode) {
+        existingMessage.parentNode.removeChild(existingMessage);
+      }
+      
+      // Create and add the message element
+      const messageElement = document.createElement('div');
+      messageElement.className = 'accessibility-auto-scroll-notification';
+      messageElement.textContent = message;
+      
+      // Add specific styles for visibility
+      messageElement.style.position = 'fixed';
+      messageElement.style.bottom = '20px';
+      messageElement.style.left = '50%';
+      messageElement.style.transform = 'translateX(-50%)';
+      messageElement.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+      messageElement.style.color = 'white';
+      messageElement.style.padding = '10px 20px';
+      messageElement.style.borderRadius = '4px';
+      messageElement.style.fontSize = '16px';
+      messageElement.style.zIndex = '100002'; // Higher than other elements
+      messageElement.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+      
+      document.body.appendChild(messageElement);
+      
+      // Remove after the specified duration
+      setTimeout(() => {
+        if (messageElement.parentNode) {
+          messageElement.parentNode.removeChild(messageElement);
+        }
+      }, duration);
+      
+      console.log('Temporary message displayed:', message);
+    } catch (error) {
+      console.error('Error showing temporary message:', error);
+    }
+  }
+
   // Check if accessibility features were previously enabled on this page
   function initAccessibilitySettings(): void {
     // First check Chrome storage for global settings
@@ -927,6 +1382,18 @@ declare global {
           toggleLargeTargets(true);
         } else if (globalSettings.largeTargets === false) {
           toggleLargeTargets(false);
+        }        // Apply custom cursor if enabled globally
+        if (globalSettings.customCursor === true) {
+          toggleCustomCursor(true);
+        } else if (globalSettings.customCursor === false) {
+          toggleCustomCursor(false);
+        }
+        
+        // Apply hover controls if enabled globally
+        if (globalSettings.hoverControls === true) {
+          toggleHoverControls(true);
+        } else if (globalSettings.hoverControls === false) {
+          toggleHoverControls(false);
         }
       } else {
         // Fall back to localStorage if no global settings found
@@ -1016,7 +1483,23 @@ declare global {
         const largeTargetsEnabled = localStorage.getItem('accessibility-large-targets') === 'true';
         if (largeTargetsEnabled) {
           toggleLargeTargets(true);
+        }        // Apply custom cursor settings from localStorage        
+        const customCursorEnabled = localStorage.getItem('accessibility-custom-cursor') === 'true';
+        if (customCursorEnabled) {
+          toggleCustomCursor(true);
         }
+        
+        // Apply auto-scroll settings from localStorage
+        const autoScrollEnabled = localStorage.getItem('accessibility-auto-scroll') === 'true';
+        if (autoScrollEnabled) {
+          toggleAutoScroll(true);
+        }
+          // Apply hover controls settings from localStorage
+        const hoverControlsState = localStorage.getItem('accessibility-hover-controls') === 'true';
+        if (hoverControlsState) {
+          toggleHoverControls(true);
+        }
+        
         // Update global storage with local settings - ensure colourblind state reflects that only one filter is active
         const colorBlindState = {
           enabled: deuteranopiaEnabled || protanopiaEnabled || tritanopiaEnabled,
@@ -1024,6 +1507,7 @@ declare global {
           protanopia: deuteranopiaEnabled ? false : protanopiaEnabled,
           tritanopia: deuteranopiaEnabled || protanopiaEnabled ? false : tritanopiaEnabled
         };
+          const hoverControlsEnabled = localStorage.getItem('accessibility-hover-controls') === 'true';
         
         chrome.storage.sync.set({
           accessibilityState: {
@@ -1035,7 +1519,10 @@ declare global {
             lineHeight: { enabled: lineHeightEnabled, value: lineHeightValue },
             reducedMotion: reducedMotionEnabled,
             keyboardNav: keyboardNavEnabled,
-            largeTargets: largeTargetsEnabled
+            largeTargets: largeTargetsEnabled,
+            customCursor: customCursorEnabled,
+            autoScroll: autoScrollEnabled,
+            hoverControls: hoverControlsEnabled
           }
         });
       }
@@ -1059,6 +1546,11 @@ declare global {
       const keyboardNavStorage = localStorage.getItem('accessibility-keyboard-nav') === 'true';
       const keyboardNavEnabled = keyboardNavDOM || keyboardNavStorage;
       const largeTargetsEnabled = document.documentElement.classList.contains('accessibility-large-targets');
+      const customCursorEnabled = !!document.querySelector('link[data-accessibility-custom-cursor]');
+      const autoScrollEnabled = !!document.querySelector('link[data-accessibility-auto-scroll]') || 
+                              localStorage.getItem('accessibility-auto-scroll') === 'true';
+      const hoverControlsEnabled = document.documentElement.classList.contains('accessibility-hover-controls') ||
+                                localStorage.getItem('accessibility-hover-controls') === 'true';
       
       // Check colourblind modes
       const deuteranopiaEnabled = document.documentElement.classList.contains('accessibility-deuteranopia');
@@ -1121,6 +1613,22 @@ declare global {
         feature: "keyboardNav",
         enabled: keyboardNavEnabled
       });
+
+      chrome.runtime.sendMessage({
+        action: "updateState",
+        feature: "customCursor",
+        enabled: customCursorEnabled
+      });      chrome.runtime.sendMessage({
+        action: "updateState",
+        feature: "autoScroll",
+        enabled: autoScrollEnabled
+      });
+
+      chrome.runtime.sendMessage({
+        action: "updateState",
+        feature: "hoverControls",
+        enabled: hoverControlsEnabled
+      });
     }, 100);
   }
 
@@ -1162,6 +1670,418 @@ declare global {
 
   // Initialize on page load
   initAccessibilitySettings();
+
+  // Clear any hover controls state to prevent issues with the navigation tracking
+  localStorage.removeItem('accessibility-hover-last-click');
+  localStorage.removeItem('accessibility-hover-last-target');
+  localStorage.removeItem('accessibility-hover-click-count');
+  // Function to toggle hover controls  
+  function toggleHoverControls(enable: boolean, fromBackground = false): void {
+    try {
+      const currentState = document.documentElement.classList.contains('accessibility-hover-controls');
+      
+      // If the state already matches what's requested, do nothing
+      if (currentState === enable) {
+        console.log(`Hover controls are already ${enable ? 'enabled' : 'disabled'}, no action needed`);
+        return;
+      }
+      
+      if (enable) {
+        // Implementation for enabling hover controls
+        console.log(`Toggling hover controls: ON`);
+        // Add hover class to document element to enable CSS styles
+        document.documentElement.classList.add('accessibility-hover-controls');
+        
+        // Create link to CSS if it doesn't exist
+        if (!document.querySelector('link[data-accessibility-hover-controls]')) {
+          try {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = chrome.runtime.getURL('hover-controls.css');
+            console.log('CSS URL:', link.href);
+            link.setAttribute('data-accessibility-hover-controls', 'true');
+            document.head.appendChild(link);
+            console.log('Hover controls CSS added to page');
+          } catch (error) {
+            console.error('Error adding hover controls CSS:', error);
+          }
+        }
+        
+        // Add event listeners
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('click', handleClick);
+        console.log('Hover controls event listeners added');
+        
+        // Store the state in localStorage
+        localStorage.setItem('accessibility-hover-controls', 'true');
+        
+        // Test by highlighting a sample element
+        setTimeout(() => {
+          console.log('Testing hover controls detection...');
+          const links = document.querySelectorAll('a');
+          console.log(`Found ${links.length} links on page`);
+        }, 500);
+      } else {
+        // Implementation for disabling hover controls
+        console.log(`Toggling hover controls: OFF`);
+        // Remove class
+        document.documentElement.classList.remove('accessibility-hover-controls');
+        
+        // Remove the CSS link
+        const link = document.querySelector('link[data-accessibility-hover-controls]');
+        if (link && link.parentNode) {
+          link.parentNode.removeChild(link);
+        }
+        
+        // Remove all hover elements first
+        removeHoverElements();
+
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('click', handleClick);
+        console.log('Hover controls event listeners removed');
+        
+        // Store the state in localStorage
+        localStorage.setItem('accessibility-hover-controls', 'false');
+      }
+      
+      // Only send update to background if this wasn't triggered by the background
+      if (!fromBackground) {
+        try {
+          chrome.runtime.sendMessage({ 
+            action: "updateState", 
+            feature: "hoverControls", 
+            enabled: enable 
+          });
+        } catch (err) {
+          console.error('Error sending message to background script:', err);
+        }
+      }
+    } catch (err) {
+      console.error('Error in toggleHoverControls:', err);
+    }
+  }
+  
+  // Variables for hover controls
+  let hoverTarget: Element | null = null;
+  let hoverIndicator: HTMLElement | null = null;
+  let hoverTimer: HTMLElement | null = null;
+  let hoverTimeout: number | null = null;
+  let lastHoverPosition = { x: 0, y: 0 };
+  
+  // Clean up all hover elements
+  function removeHoverElements(): void {
+    // Clear any active timeout
+    if (hoverTimeout) {
+      window.clearTimeout(hoverTimeout);
+      hoverTimeout = null;
+    }
+    
+    // Remove the hover indicator if it exists
+    const indicators = document.querySelectorAll('.accessibility-hover-indicator');
+    indicators.forEach(indicator => {
+      if (indicator.parentNode) {
+        indicator.parentNode.removeChild(indicator);
+      }
+    });
+    
+    // Remove any animations that might be playing
+    const animations = document.querySelectorAll('.accessibility-hover-click-animation');
+    animations.forEach(animation => {
+      if (animation.parentNode) {
+        animation.parentNode.removeChild(animation);
+      }
+    });
+    
+    // Reset variables
+    hoverTarget = null;
+    hoverIndicator = null;
+    hoverTimer = null;
+  }
+  // Function to handle mouse movement
+  function handleMouseMove(event: MouseEvent): void {
+    // Get the element under the mouse
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    
+    // Store current mouse position
+    lastHoverPosition = { x: event.clientX, y: event.clientY };
+    
+    // Skip if no target or if it's a hover control element
+    if (!target || 
+        target.closest('.accessibility-hover-indicator') || 
+        target.closest('.accessibility-hover-click-animation')) {
+      return;
+    }
+    
+    // Check if it's a clickable element
+    const isClickable = isElementClickable(target);
+    
+    // Log occasional debug info (throttled to avoid console spam)
+    if (Math.random() < 0.01) {  // Only log ~1% of movements
+      console.log(`Mouse over ${target.tagName}${target.id ? '#'+target.id : ''}, clickable: ${isClickable}`);
+    }
+    
+    // If not a clickable element, remove hover indicators and clear timeout
+    if (!isClickable) {
+      removeHoverElements();
+      return;
+    }
+    
+    // If it's the same target as before, reset the timer
+    if (target === hoverTarget) {
+      // Reset the timer for the current target
+      if (hoverTimeout) {
+        window.clearTimeout(hoverTimeout);
+        hoverTimeout = null;
+      }
+      
+      // Restart the timer animation
+      startHoverTimer();
+      return;
+    }
+    
+    // It's a new clickable target, set up hover
+    console.log(`New clickable target: ${target.tagName}${target.id ? '#'+target.id : ''}`);
+    removeHoverElements();
+    setupHoverIndicator(target, event.clientX, event.clientY);
+  }
+  
+  // Check if an element is clickable (link, button, etc.)
+  function isElementClickable(element: Element | null): boolean {
+    if (!element) return false;
+    
+    // Check tag name for common clickable elements
+    const tagName = element.tagName.toLowerCase();
+    if (['a', 'button', 'input', 'select', 'textarea', 'summary'].includes(tagName)) {
+      return true;
+    }
+    
+    if (element.hasAttribute('role')) {
+      const role = element.getAttribute('role')?.toLowerCase();
+      if (['button', 'link', 'checkbox', 'radio', 'switch', 'tab', 'menuitem'].includes(role || '')) {
+        return true;
+      }
+    }
+    
+    // Check for cursor style suggesting it's clickable
+    const styles = window.getComputedStyle(element as Element);
+    if (styles.cursor === 'pointer') {
+      return true;
+    }
+    
+    // Check for common class names that suggest interactive elements
+    const classNames = element.className.split(' ');
+    const interactiveClassPatterns = ['btn', 'button', 'clickable', 'link', 'nav-item', 'menu-item'];
+    for (const pattern of interactiveClassPatterns) {
+      if (classNames.some(className => className.toLowerCase().includes(pattern))) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  // Set up hover indicator and timer
+  function setupHoverIndicator(target: Element, clientX: number, clientY: number): void {
+    console.log(`Setting up hover indicator for ${target.tagName} element`);
+    
+    // Set current hover target
+    hoverTarget = target;
+    
+    // Get target's bounding rect
+    const rect = target.getBoundingClientRect();
+    console.log(`Target position: top=${rect.top}, left=${rect.left}, width=${rect.width}, height=${rect.height}`);
+    
+    // Create hover indicator
+    hoverIndicator = document.createElement('div');
+    hoverIndicator.className = 'accessibility-hover-indicator';
+    hoverIndicator.style.top = rect.top + window.scrollY + 'px';
+    hoverIndicator.style.left = rect.left + window.scrollX + 'px';
+    hoverIndicator.style.width = rect.width + 'px';
+    hoverIndicator.style.height = rect.height + 'px';
+    
+    // Create timer bar
+    hoverTimer = document.createElement('div');
+    hoverTimer.className = 'accessibility-hover-timer';
+    hoverIndicator.appendChild(hoverTimer);
+    
+    // Add to document
+    document.body.appendChild(hoverIndicator);
+    console.log('Hover indicator added to document');
+    
+    // Store current mouse position for click animation
+    lastHoverPosition = { x: clientX, y: clientY };
+    
+    // Start hover timer animation
+    startHoverTimer();
+  }
+    // Handle hover timer animation and action
+  function startHoverTimer(): void {
+    // Clear any existing timeout
+    if (hoverTimeout) {
+      window.clearTimeout(hoverTimeout);
+    }
+    
+    // Skip if no hover elements
+    if (!hoverIndicator || !hoverTimer || !hoverTarget) return;
+    
+    // Animation duration (3000ms = 3 seconds)
+    const HOVER_DURATION = 3000;
+    let startTime = Date.now();
+    
+    console.log('Starting hover timer animation');
+    
+    // Function to update timer
+    const updateTimer = () => {
+      if (!hoverIndicator || !hoverTimer || !hoverTarget) return;
+      
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / HOVER_DURATION, 1);
+      
+      // Update timer width
+      hoverTimer.style.width = (progress * 100) + '%';
+      
+      // Add class when we're almost done
+      if (progress > 0.75) {
+        hoverIndicator.classList.add('accessibility-hover-almost-complete');
+      } else {
+        hoverIndicator.classList.remove('accessibility-hover-almost-complete');
+      }
+      
+      // If timer is complete, trigger click
+      if (progress >= 1) {
+        console.log('Timer complete, triggering click');
+        triggerClickOnTarget();
+      } else {
+        // Otherwise, continue animation
+        window.requestAnimationFrame(updateTimer);
+      }
+    };
+    
+    // Start the animation
+    window.requestAnimationFrame(updateTimer);
+    
+    // Set a backup timeout for 3 seconds as a fallback
+    hoverTimeout = window.setTimeout(() => {
+      console.log('Timer backup triggered');
+      triggerClickOnTarget();
+    }, HOVER_DURATION);
+  }
+    // Trigger click animation and actual click
+  function triggerClickOnTarget(): void {
+    if (!hoverTarget || !hoverIndicator) return;
+    
+    // Clear any hover timeout
+    if (hoverTimeout) {
+      window.clearTimeout(hoverTimeout);
+      hoverTimeout = null;
+    }
+    
+    // Create click animation
+    const clickAnimation = document.createElement('div');
+    clickAnimation.className = 'accessibility-hover-click-animation';
+    clickAnimation.style.top = (lastHoverPosition.y + window.scrollY) + 'px';
+    clickAnimation.style.left = (lastHoverPosition.x + window.scrollX) + 'px';
+    clickAnimation.style.transform = 'translate(-50%, -50%)';
+    document.body.appendChild(clickAnimation);
+    
+    // Show temporary message
+    showTemporaryMessage('Clicking element', 1000);
+    
+    // Simulate click on the target
+    console.log('Simulating click on', hoverTarget.tagName, hoverTarget.textContent ? hoverTarget.textContent.slice(0, 20) : '');
+    simulateClick(hoverTarget);
+    
+    // Remove after animation finishes
+    setTimeout(() => removeHoverElements(), 500);
+  }
+  // Function to safely simulate a click
+  function simulateClick(element: Element): void {
+    try {
+      const now = Date.now();
+      const lastClickTime = parseInt(localStorage.getItem('accessibility-hover-last-click') || '0', 10);
+      const lastClickTarget = localStorage.getItem('accessibility-hover-last-target') || '';
+      const currentTarget = element.tagName + 
+                           (element.id ? '#' + element.id : '') + 
+                           (element.className ? '.' + element.className.replace(/\s+/g, '.') : '');
+      
+      const timeSinceLastClick = now - lastClickTime;
+      const sameTarget = currentTarget === lastClickTarget;
+      
+      // Clear old click data if it's been more than 5 seconds
+      if (timeSinceLastClick > 5000) {
+        localStorage.removeItem('accessibility-hover-last-click');
+        localStorage.removeItem('accessibility-hover-last-target');
+        localStorage.removeItem('accessibility-hover-click-count');
+      }
+      
+      if (timeSinceLastClick < 1000 && sameTarget) {
+        const clickCount = parseInt(localStorage.getItem('accessibility-hover-click-count') || '0', 10) + 1;
+        localStorage.setItem('accessibility-hover-click-count', clickCount.toString());
+        
+        if (clickCount > 3) {
+          console.log('Too many rapid clicks on same element, pausing briefly');
+          setTimeout(() => {
+            localStorage.removeItem('accessibility-hover-click-count');
+          }, 3000);
+          return;
+        }
+      } else {
+        // Reset click count for new elements
+        localStorage.setItem('accessibility-hover-click-count', '1');
+      }
+      
+      // Update click timestamp and target
+      localStorage.setItem('accessibility-hover-last-click', now.toString());
+      localStorage.setItem('accessibility-hover-last-target', currentTarget);
+      
+      // For links, handle navigation with care
+      if (element.tagName.toLowerCase() === 'a') {
+        const anchor = element as HTMLAnchorElement;
+        const href = anchor.href;
+        
+        // Skip javascript: URLs or empty hrefs
+        if (!href || href.startsWith('javascript:') || href === '#') {
+          const clickEvent = new MouseEvent('click', {
+            view: window,
+            bubbles: true,
+            cancelable: true,
+            clientX: lastHoverPosition.x,
+            clientY: lastHoverPosition.y
+          });
+          element.dispatchEvent(clickEvent);
+        } else {
+          console.log('Link with href detected, navigating to:', href);
+          
+          // Use a minimal timeout to let the animation complete
+          setTimeout(() => {
+            try {
+              // Navigate to the URL
+              window.location.assign(href);
+            } catch (navError) {
+              console.error('Navigation error:', navError);
+            }
+          }, 50);
+        }
+      } else {
+        console.log('Simulating click on non-link element');
+        // For non-link elements, use the standard click approach
+        const clickEvent = new MouseEvent('click', {
+          view: window,
+          bubbles: true,
+          cancelable: true,
+          clientX: lastHoverPosition.x,
+          clientY: lastHoverPosition.y
+        });
+        element.dispatchEvent(clickEvent);
+      }
+    } catch (error) {
+      console.error('Error simulating click:', error);
+    }
+  }
+  
+  // Handle real clicks to clear hover elements
+  function handleClick(): void {
+    removeHoverElements();
+  }
 
   // Add console message to help with debugging
   console.debug("Accessibility extension content script loaded");

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { CollapsibleSlider } from '@/components/ui/collapsible-slider';
-import { Contrast, Type, Keyboard, Video, BookA, Eye, MousePointer, Brain, Sun, Moon, TextSelect, RulerIcon, AlignJustify, MousePointerClick, MousePointer2, StickyNote, MousePointerSquareDashed, LayoutDashboard, Focus, MoveHorizontal, EyeOff, ChevronDown, ChevronUp, Link2, ImageIcon } from 'lucide-react';
+import { Contrast, Type, Keyboard, Video, BookA, Eye, MousePointer, Brain, Sun, Moon, TextSelect, RulerIcon, AlignJustify, MousePointerClick, MousePointer2, MousePointerSquareDashed, LayoutDashboard, Focus, MoveHorizontal, EyeOff, ChevronDown, ChevronUp, Link2, ImageIcon, ArrowDownUp } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { useTheme } from 'next-themes';
@@ -35,6 +35,9 @@ interface AccessibilityState {
     enabled: boolean;
     value: number;
   };
+  customCursor?: boolean;
+  autoScroll?: boolean;
+  hoverControls?: boolean;
 }
 
 // Define a new component for collapsible toggles
@@ -129,7 +132,7 @@ export default function Popup() {
   const [motor, setMotor] = useState(false);
   const [largeTargets, setLargeTargets] = useState<{enabled: boolean, value: number}>({enabled: false, value: 1.5});
   const [customCursor, setCustomCursor] = useState(false);
-  const [stickyKeys, setStickyKeys] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(false);
   const [hoverControls, setHoverControls] = useState(false);
   // Cognitive features
   const [simplifiedView, setSimplifiedView] = useState(false);
@@ -155,6 +158,9 @@ export default function Popup() {
         setReducedMotion(updatedState.reducedMotion || false);
         setMotor(updatedState.keyboardNav || false);
         setLargeTargets(updatedState.largeTargets || {enabled: false, value: 1.5});
+        setCustomCursor(updatedState.customCursor || false);
+        setAutoScroll(updatedState.autoScroll || false);
+        setHoverControls(updatedState.hoverControls || false);
       }
       return true;
     };
@@ -169,9 +175,13 @@ export default function Popup() {
         setReadingLine(response.readingLine || false);
         setColorBlind(response.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
         setTextScaling(response.textScaling || { enabled: false, value: 100 });
-        setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });        setReducedMotion(response.reducedMotion || false);
+        setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });        
+        setReducedMotion(response.reducedMotion || false);
         setMotor(response.keyboardNav || false);
         setLargeTargets(response.largeTargets || {enabled: false, value: 1.5});
+        setCustomCursor(response.customCursor || false);
+        setAutoScroll(response.autoScroll || false);
+        setHoverControls(response.hoverControls || false);
       }
       
       // Query the active tab directly to get the most up-to-date keyboard navigation state
@@ -545,7 +555,7 @@ export default function Popup() {
           setMotor(false);
           setLargeTargets({enabled: false, value: 1.5});
           setCustomCursor(false);
-          setStickyKeys(false);          
+          setAutoScroll(false);          
           setHoverControls(false);
           setSimplifiedView(false);
           setFocusMode(false);
@@ -554,6 +564,7 @@ export default function Popup() {
           setAiAlt(false);
           setColorBlind({ enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
           setReducedMotion(false);
+          setCustomCursor(false);
           
           // Notify the user
           toast.success('All accessibility features turned off', {
@@ -614,22 +625,150 @@ export default function Popup() {
     setLargeTargets(prev => ({...prev, enabled: checked}));
     
     // Then send message to background script
+    try {
+      chrome.runtime.sendMessage({ 
+        action: "toggleFeature",
+        feature: "largeTargets",
+        enabled: checked
+      }, (response) => {
+        // Check for runtime.lastError first
+        if (chrome.runtime.lastError) {
+          console.error("Error toggling large targets:", chrome.runtime.lastError.message);
+          toast.error(`Failed to toggle Larger Click Targets: ${chrome.runtime.lastError.message}`, {
+            id: FEATURE_TOAST_ID
+          });
+          setLargeTargets(prev => ({...prev, enabled: !checked}));
+          return;
+        }
+
+        if (response && response.status === "success") {
+          // Show success toast
+          toast.success(`Larger Click Targets ${checked ? 'enabled' : 'disabled'}!`, {
+            id: FEATURE_TOAST_ID
+          });
+        } else {
+          // Show error toast and revert UI state
+          toast.error(`Failed to toggle Larger Click Targets`, {
+            id: FEATURE_TOAST_ID
+          });
+          setLargeTargets(prev => ({...prev, enabled: !checked}));
+        }
+      });
+    } catch (error) {
+      console.error("Exception toggling large targets:", error);
+      toast.error(`Failed to toggle Larger Click Targets`, {
+        id: FEATURE_TOAST_ID
+      });
+      setLargeTargets(prev => ({...prev, enabled: !checked}));
+    }
+  };
+  // Handler for custom cursor toggle
+  const toggleCustomCursor = (checked: boolean) => {
+    // First update UI for responsiveness
+    setCustomCursor(checked);
+    
+    // Then send message to background script
+    try {
+      chrome.runtime.sendMessage({ 
+        action: "toggleFeature",
+        feature: "customCursor",
+        enabled: checked
+      }, (response) => {
+        // Check for runtime.lastError first
+        if (chrome.runtime.lastError) {
+          console.error("Error toggling custom cursor:", chrome.runtime.lastError.message);
+          toast.error(`Failed to toggle Custom Cursor: ${chrome.runtime.lastError.message}`, {
+            id: FEATURE_TOAST_ID
+          });
+          setCustomCursor(!checked);
+          return;
+        }
+
+        if (response && response.status === "success") {
+          // Show success toast
+          toast.success(`Custom Cursor ${checked ? 'enabled' : 'disabled'}!`, {
+            id: FEATURE_TOAST_ID
+          });
+        } else {
+          // Show error toast and revert UI state
+          toast.error(`Failed to toggle Custom Cursor`, {
+            id: FEATURE_TOAST_ID
+          });
+          setCustomCursor(!checked);
+        }
+      });
+    } catch (error) {
+      console.error("Exception toggling custom cursor:", error);
+      toast.error(`Failed to toggle Custom Cursor`, {
+        id: FEATURE_TOAST_ID
+      });
+      setCustomCursor(!checked);
+    }
+  };
+  // Handler for Auto-Scroll toggle
+  const handleAutoScroll = (enabled: boolean) => {
+    // Update local state
+    setAutoScroll(enabled);
+    
+    // Show toast immediately to improve perceived performance
+    toast.success(`Auto-Scroll ${enabled ? 'enabled' : 'disabled'}!`, {
+      id: FEATURE_TOAST_ID
+    });
+    
+    // Send message to the background script to update state and apply to all tabs
+    chrome.runtime.sendMessage({
+      action: "toggleFeature",
+      feature: "autoScroll",
+      enabled
+    }, (response) => {
+      // Handle errors if any
+      if (chrome.runtime.lastError) {
+        console.error("Error toggling auto-scroll via background script:", chrome.runtime.lastError);
+        toast.error(`There was an issue with the Auto-Scroll feature`, {
+          id: FEATURE_TOAST_ID
+        });
+        return;
+      }
+      
+      if (response && response.status !== "success") {
+        console.error("Error response from background script:", response);
+        toast.error(`There was an issue with the Auto-Scroll feature`, {
+          id: FEATURE_TOAST_ID
+        });
+      }    });
+  };  // Handle hover controls toggle
+  const handleHoverControlsToggle = (checked: boolean) => {
+    // Update state immediately for responsive UI
+    setHoverControls(checked);
+    
+    // Show toast immediately for better user experience
+    toast.success(`Hover Controls ${checked ? 'enabled' : 'disabled'}!`, {
+      id: FEATURE_TOAST_ID
+    });
+    
+    // Send message to background script
     chrome.runtime.sendMessage({ 
       action: "toggleFeature",
-      feature: "largeTargets",
-      enabled: checked
+      feature: "hoverControls", 
+      enabled: checked 
     }, (response) => {
-      if (response && response.status === "success") {
-        // Show success toast
-        toast.success(`Larger Click Targets ${checked ? 'enabled' : 'disabled'}!`, {
+      // Safe check for runtime lastError
+      if (chrome.runtime.lastError) {
+        console.error("Error toggling hover controls:", chrome.runtime.lastError);
+        toast.error('Error toggling Hover Controls', {
           id: FEATURE_TOAST_ID
         });
-      } else {
-        // Show error toast and revert UI state
-        toast.error(`Failed to toggle Larger Click Targets`, {
+        // Revert UI state if operation failed
+        setHoverControls(!checked);
+        return;
+      }
+      
+      // Check response content
+      if (!response || response.status !== "success") {
+        toast.error('Failed to toggle Hover Controls', {
           id: FEATURE_TOAST_ID
-        });
-        setLargeTargets(prev => ({...prev, enabled: !checked}));
+        });        // Revert UI state if operation failed
+        setHoverControls(!checked);
       }
     });
   };
@@ -873,21 +1012,21 @@ export default function Popup() {
             <span className="flex items-center gap-2">
               <MousePointer2 size={16} /> Custom Cursor
             </span>
-            <Switch checked={customCursor} onCheckedChange={handleToggle(setCustomCursor, 'Custom Cursor')} />
+            <Switch checked={customCursor} onCheckedChange={toggleCustomCursor} />
           </div>
           
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2">
-              <StickyNote size={16} /> Sticky Keys
+              <ArrowDownUp size={16} /> Auto-Scroll
             </span>
-            <Switch checked={stickyKeys} onCheckedChange={handleToggle(setStickyKeys, 'Sticky Keys')} />
+            <Switch checked={autoScroll} onCheckedChange={handleAutoScroll} />
           </div>
           
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <MousePointerSquareDashed size={16} /> Hover Controls
             </span>
-            <Switch checked={hoverControls} onCheckedChange={handleToggle(setHoverControls, 'Hover Controls')} />
+            <Switch checked={hoverControls} onCheckedChange={handleHoverControlsToggle} />
           </div>
         </CardContent>
       </Card>

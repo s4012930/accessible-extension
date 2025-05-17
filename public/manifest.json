@@ -3,7 +3,7 @@
     "name": "Accessibility Booster",
     "short_name": "AccBooster",
     "description": "Adds Accessibility features to any website.",
-    "version": "0.4.0",
+    "version": "0.8.0",
   
     "action": {
       "default_popup": "popup.html"
@@ -43,8 +43,12 @@
           "tritanopia.css",
           "reduced-motion.css",
           "keyboard-nav.css",
-          "large-targets.css", 
-          "fonts/*"
+          "large-targets.css",
+          "custom-cursor.css",
+          "auto-scroll.css",
+          "hover-controls.css",
+          "fonts/*",
+          "cursors/*"
         ],
         "matches": ["<all_urls>"]
       }
