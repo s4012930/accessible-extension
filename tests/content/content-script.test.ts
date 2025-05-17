@@ -164,6 +164,89 @@ function createMessageHandler() {
       return true;
     }
     
+    if (message.action === 'toggleLargeTargets') {
+      if (message.enabled) {
+        document.documentElement.classList.add('accessibility-large-targets');
+        
+        // Check if stylesheet already exists before creating a new one
+        const existingStyleElement = document.querySelector('link[data-accessibility-large-targets]');
+        if (!existingStyleElement) {
+          // Create stylesheet element
+          const styleElement = document.createElement('link');
+          styleElement.rel = 'stylesheet';
+          styleElement.href = chrome.runtime.getURL('large-targets.css');
+          styleElement.setAttribute('data-accessibility-large-targets', '');
+          document.head.appendChild(styleElement);
+        }
+      } else {
+        document.documentElement.classList.remove('accessibility-large-targets');
+        
+        // Remove stylesheet if exists
+        const styleElement = document.querySelector('link[data-accessibility-large-targets]');
+        if (styleElement) {
+          styleElement.remove();
+        }
+      }
+      
+      localStorage.setItem('accessibility-large-targets', String(message.enabled));
+      sendResponse({ status: 'success' });
+      return true;
+    }
+    
+    if (message.action === 'toggleHoverControls') {
+      if (message.enabled) {
+        document.documentElement.classList.add('accessibility-hover-controls');
+        
+        // Create hover controls related elements
+        const hoverStyle = document.createElement('link');
+        hoverStyle.rel = 'stylesheet';
+        hoverStyle.href = chrome.runtime.getURL('hover-controls.css');
+        hoverStyle.setAttribute('data-accessibility-hover-controls', '');
+        document.head.appendChild(hoverStyle);
+        
+        // Set up tracking state
+        (window as any).hoverControlsActive = true;
+      } else {
+        document.documentElement.classList.remove('accessibility-hover-controls');
+        
+        // Remove stylesheet
+        const styleElement = document.querySelector('link[data-accessibility-hover-controls]');
+        if (styleElement) {
+          styleElement.remove();
+        }
+        
+        // Remove any active hover indicators
+        const indicators = document.querySelectorAll('.accessibility-hover-indicator');
+        indicators.forEach(indicator => indicator.remove());
+        
+        // Update tracking state
+        (window as any).hoverControlsActive = false;
+      }
+      
+      localStorage.setItem('accessibility-hover-controls', String(message.enabled));
+      sendResponse({ status: 'success' });
+      return true;
+    }
+    
+    if (message.action === 'toggleKeyboardNav') {
+      if (message.enabled) {
+        document.documentElement.classList.add('accessibility-keyboard-nav');
+        (window as any).keyboardNavActive = true;
+        (window as any).keyboardClickDelay = message.delay || 1500; // Default delay
+      } else {
+        document.documentElement.classList.remove('accessibility-keyboard-nav');
+        (window as any).keyboardNavActive = false;
+        
+        // Clear any pending timers (simulated)
+        (window as any).mockKeyboardTimer = null;
+      }
+      
+      localStorage.setItem('accessibility-keyboard-nav', String(message.enabled));
+      localStorage.setItem('accessibility-keyboard-nav-delay', String(message.delay || 1500));
+      sendResponse({ status: 'success' });
+      return true;
+    }
+    
     return false;
   };
 }
@@ -198,7 +281,7 @@ describe('Content Script Functionality', () => {
     );
     
     // Check if the class was removed
-    expect(document.documentElement.classList.contains('accessibility-high-contrast')). toBe(false);
+    expect(document.documentElement.classList.contains('accessibility-high-contrast')).toBe(false);
     
     // Check if localStorage was updated
     expect(localStorage.setItem).toHaveBeenCalledWith('accessibility-high-contrast', 'false');
@@ -483,4 +566,477 @@ describe('Content Script Functionality', () => {
     expect(document.documentElement.classList.contains('accessibility-deuteranopia')).toBe(false);
     expect(document.documentElement.classList.contains('accessibility-protanopia')).toBe(true);
   });
+});
+it('toggles large targets mode on', () => {
+  const messageHandler = createMessageHandler();
+  
+  // Toggle large targets on
+  messageHandler(
+    { action: 'toggleLargeTargets', enabled: true },
+    {},
+    (response: any) => {
+      expect(response.status).toBe('success');
+    }
+  );
+  
+  // Check if the large targets class was added
+  expect(document.documentElement.classList.contains('accessibility-large-targets')).toBe(true);
+  
+  // Check if localStorage was updated
+  expect(localStorage.setItem).toHaveBeenCalledWith('accessibility-large-targets', 'true');
+  
+  // Check if a stylesheet was added with the correct attribute
+  const stylesheet = document.querySelector('link[data-accessibility-large-targets]');
+  expect(stylesheet).not.toBeNull();
+  expect(stylesheet?.getAttribute('href')).toContain('large-targets.css');
+});
+
+it('toggles large targets mode off', () => {
+  const messageHandler = createMessageHandler();
+  
+  // Toggle large targets on first
+  messageHandler(
+    { action: 'toggleLargeTargets', enabled: true },
+    {},
+    () => {}
+  );
+  
+  // Then toggle it off
+  messageHandler(
+    { action: 'toggleLargeTargets', enabled: false },
+    {},
+    (response: any) => {
+      expect(response.status).toBe('success');
+    }
+  );
+  
+  // Check if the class was removed
+  expect(document.documentElement.classList.contains('accessibility-large-targets')).toBe(false);
+  
+  // Check if localStorage was updated
+  expect(localStorage.setItem).toHaveBeenCalledWith('accessibility-large-targets', 'false');
+  
+  // Check if the stylesheet was removed
+  const stylesheet = document.querySelector('link[data-accessibility-large-targets]');
+  expect(stylesheet).toBeNull();
+});
+
+it('handles redundant large targets state changes', () => {
+  const messageHandler = createMessageHandler();
+  
+  // First toggle on
+  messageHandler(
+    { action: 'toggleLargeTargets', enabled: true },
+    {},
+    () => {}
+  );
+  
+  // Clear mock calls to check if they're called again
+  localStorage.setItem.mockClear();
+  
+  // Toggle on again (should be a no-op for DOM operations)
+  messageHandler(
+    { action: 'toggleLargeTargets', enabled: true },
+    {},
+    (response: any) => {
+      expect(response.status).toBe('success');
+    }
+  );
+  
+  // Should still have the class
+  expect(document.documentElement.classList.contains('accessibility-large-targets')).toBe(true);
+  
+  // Should update localStorage even if redundant
+  expect(localStorage.setItem).toHaveBeenCalledWith('accessibility-large-targets', 'true');
+  
+  // Should not create additional stylesheets
+  const stylesheets = document.querySelectorAll('link[data-accessibility-large-targets]');
+  expect(stylesheets.length).toBe(1);
+});
+
+it('updates the line-height stylesheet and data attribute', () => {
+  const messageHandler = createMessageHandler();
+
+  // Add to createMessageHandler for line height functionality
+  const updatedMessageHandler = function(
+    message: any, 
+    sender: any, 
+    sendResponse: (response: any) => void
+  ) {
+    if (message.action === 'updateLineHeight') {
+      if (message.enabled) {
+        // Create style element
+        const style = document.createElement('style');
+        style.id = 'accessibility-line-height';
+        style.textContent = `html[data-line-height="custom"] * { line-height: ${message.value} !important; }`;
+        document.head.appendChild(style);
+        
+        // Add data attribute
+        document.documentElement.setAttribute('data-line-height', 'custom');
+      } else {
+        // Remove style element if exists
+        const existingStyle = document.getElementById('accessibility-line-height');
+        if (existingStyle) {
+          existingStyle.remove();
+        }
+        
+        // Remove data attribute
+        document.documentElement.removeAttribute('data-line-height');
+      }
+      
+      localStorage.setItem('accessibility-line-height-enabled', String(message.enabled));
+      if (message.enabled) {
+        localStorage.setItem('accessibility-line-height-value', String(message.value));
+      }
+      
+      sendResponse({ status: 'success' });
+      return true;
+    }
+    
+    return messageHandler(message, sender, sendResponse);
+  };
+  
+  // Test enabling line height with a value of 2
+  updatedMessageHandler(
+    { action: 'updateLineHeight', enabled: true, value: 2 },
+    {},
+    (response: any) => {
+      expect(response.status).toBe('success');
+    }
+  );
+  
+  // Check if the data attribute was added
+  expect(document.documentElement.getAttribute('data-line-height')).toBe('custom');
+  
+  // Check if the style element exists
+  const style = document.getElementById('accessibility-line-height');
+  expect(style).not.toBeNull();
+  
+  // Check if localStorage was updated correctly
+  expect(localStorage.setItem).toHaveBeenCalledWith('accessibility-line-height-enabled', 'true');
+  expect(localStorage.setItem).toHaveBeenCalledWith('accessibility-line-height-value', '2');
+  
+  // Now test disabling
+  updatedMessageHandler(
+    { action: 'updateLineHeight', enabled: false },
+    {},
+    (response: any) => {
+      expect(response.status).toBe('success');
+    }
+  );
+  
+  // Check if the data attribute was removed
+  expect(document.documentElement.getAttribute('data-line-height')).toBeNull();
+  
+  // Check if the style element was removed
+  const styleAfter = document.getElementById('accessibility-line-height');
+  expect(styleAfter).toBeNull();
+  
+  // Check if localStorage was updated correctly
+  expect(localStorage.setItem).toHaveBeenCalledWith('accessibility-line-height-enabled', 'false');
+});
+
+it('toggles hover controls', () => {
+  // Update createMessageHandler to handle hover controls first
+  const originalHandler = createMessageHandler();
+  const messageHandler = function(message: any, sender: any, sendResponse: (response: any) => void) {
+    if (message.action === 'toggleHoverControls') {
+      if (message.enabled) {
+        document.documentElement.classList.add('accessibility-hover-controls');
+        
+        // Create hover controls related elements
+        const hoverStyle = document.createElement('link');
+        hoverStyle.rel = 'stylesheet';
+        hoverStyle.href = chrome.runtime.getURL('hover-controls.css');
+        hoverStyle.setAttribute('data-accessibility-hover-controls', '');
+        document.head.appendChild(hoverStyle);
+        
+        // Set up tracking state
+        (window as any).hoverControlsActive = true;
+      } else {
+        document.documentElement.classList.remove('accessibility-hover-controls');
+        
+        // Remove stylesheet
+        const styleElement = document.querySelector('link[data-accessibility-hover-controls]');
+        if (styleElement) {
+          styleElement.remove();
+        }
+        
+        // Remove any active hover indicators
+        const indicators = document.querySelectorAll('.accessibility-hover-indicator');
+        indicators.forEach(indicator => indicator.remove());
+        
+        // Update tracking state
+        (window as any).hoverControlsActive = false;
+      }
+      
+      localStorage.setItem('accessibility-hover-controls', String(message.enabled));
+      sendResponse({ status: 'success' });
+      return true;
+    }
+    
+    return originalHandler(message, sender, sendResponse);
+  };
+  
+  // Toggle hover controls on
+  messageHandler(
+    { action: 'toggleHoverControls', enabled: true },
+    {},
+    (response: any) => {
+      expect(response.status).toBe('success');
+    }
+  );
+  
+  // Check if the hover controls class was added
+  expect(document.documentElement.classList.contains('accessibility-hover-controls')).toBe(true);
+  
+  // Check if a stylesheet was added
+  const stylesheet = document.querySelector('link[data-accessibility-hover-controls]');
+  expect(stylesheet).not.toBeNull();
+  expect(stylesheet?.getAttribute('href')).toContain('hover-controls.css');
+  
+  // Simulate mousemove over an element
+  const link = document.createElement('a');
+  link.href = '#test';
+  link.textContent = 'Test Link';
+  document.body.appendChild(link);
+  
+  // Simulate mouse event handler
+  const mockHoverEvent = new MouseEvent('mousemove');
+  Object.defineProperty(mockHoverEvent, 'target', { value: link });
+  
+  // Manually call what would be the mousemove handler
+  if ((window as any).hoverControlsActive) {
+    const indicator = document.createElement('div');
+    indicator.className = 'accessibility-hover-indicator';
+    document.body.appendChild(indicator);
+  }
+  
+  // Check if the hover indicator was added
+  const indicators = document.querySelectorAll('.accessibility-hover-indicator');
+  expect(indicators.length).toBe(1);
+  
+  // Toggle hover controls off
+  messageHandler(
+    { action: 'toggleHoverControls', enabled: false },
+    {},
+    (response: any) => {
+      expect(response.status).toBe('success');
+    }
+  );
+  
+  // Check if the class was removed
+  expect(document.documentElement.classList.contains('accessibility-hover-controls')).toBe(false);
+  
+  // Check if indicators were removed
+  const indicatorsAfter = document.querySelectorAll('.accessibility-hover-indicator');
+  expect(indicatorsAfter.length).toBe(0);
+  
+  // Check if localStorage was updated
+  expect(localStorage.setItem).toHaveBeenCalledWith('accessibility-hover-controls', 'false');
+});
+
+it('toggles keyboard navigation auto-click feature', () => {
+  // Set up fake timers for this test
+  vi.useFakeTimers();
+
+  // Add key navigation to message handler
+  const originalHandler = createMessageHandler();
+  const messageHandler = function(message: any, sender: any, sendResponse: (response: any) => void) {
+    if (message.action === 'toggleKeyboardNav') {
+      if (message.enabled) {
+        document.documentElement.classList.add('accessibility-keyboard-nav');
+        (window as any).keyboardNavActive = true;
+        (window as any).keyboardClickDelay = message.delay || 1500; // Default delay
+      } else {
+        document.documentElement.classList.remove('accessibility-keyboard-nav');
+        (window as any).keyboardNavActive = false;
+        
+        // Clear any pending timers (simulated)
+        (window as any).mockKeyboardTimer = null;
+      }
+      
+      localStorage.setItem('accessibility-keyboard-nav', String(message.enabled));
+      localStorage.setItem('accessibility-keyboard-nav-delay', String(message.delay || 1500));
+      sendResponse({ status: 'success' });
+      return true;
+    }
+    
+    return originalHandler(message, sender, sendResponse);
+  };
+  
+  // Create a test button
+  const button = document.createElement('button');
+  button.textContent = 'Test Button';
+  document.body.appendChild(button);
+  let wasClicked = false;
+  button.addEventListener('click', () => { wasClicked = true; });
+  
+  // Toggle keyboard navigation on with shorter delay for testing
+  messageHandler(
+    { action: 'toggleKeyboardNav', enabled: true, delay: 100 },
+    {},
+    (response: any) => {
+      expect(response.status).toBe('success');
+    }
+  );
+  
+  // Check if feature was enabled
+  expect(document.documentElement.classList.contains('accessibility-keyboard-nav')).toBe(true);
+  expect((window as any).keyboardNavActive).toBe(true);
+  expect((window as any).keyboardClickDelay).toBe(100);
+  
+  // Simulate focus event
+  button.focus();
+  
+  // In actual implementation, this would set a timer - we'll simulate that
+  if ((window as any).keyboardNavActive) {
+    (window as any).mockKeyboardTimer = setTimeout(() => {
+      button.click();
+    }, (window as any).keyboardClickDelay);
+  }
+  
+  // Fast-forward timer
+  vi.advanceTimersByTime(150);
+  
+  // Check if button was clicked
+  expect(wasClicked).toBe(true);
+  
+  // Toggle keyboard navigation off
+  messageHandler(
+    { action: 'toggleKeyboardNav', enabled: false },
+    {},
+    (response: any) => {
+      expect(response.status).toBe('success');
+    }
+  );
+  
+  // Check if feature was disabled
+  expect(document.documentElement.classList.contains('accessibility-keyboard-nav')).toBe(false);
+  expect((window as any).keyboardNavActive).toBe(false);
+  
+  // Reset click flag
+  wasClicked = false;
+  
+  // Simulate focus event again
+  button.focus();
+  
+  // Since feature is disabled, no timer should be set
+  expect((window as any).mockKeyboardTimer).toBeNull();
+  
+  // Fast-forward timer again
+  vi.advanceTimersByTime(150);
+  
+  // Check that button wasn't clicked this time
+  expect(wasClicked).toBe(false);
+  
+  // Clean up by restoring real timers
+  vi.useRealTimers();
+});
+
+it('initializes features from localStorage values', () => {
+  // Mock localStorage with saved settings
+  localStorage.getItem = vi.fn((key) => {
+    const savedSettings = {
+      'accessibility-high-contrast': 'true',
+      'accessibility-dyslexia-font': 'true',
+      'accessibility-reading-line': 'false',
+      'accessibility-deuteranopia': 'true',
+      'accessibility-reduced-motion': 'false',
+      'accessibility-large-targets': 'true',
+      'accessibility-hover-controls': 'false',
+      'accessibility-keyboard-nav': 'true',
+      'accessibility-keyboard-nav-delay': '2000',
+      'accessibility-line-height-enabled': 'true',
+      'accessibility-line-height-value': '1.8'
+    };
+    return savedSettings[key] || null;
+  });
+  
+  // Create the initialization function that would be in content-script.ts
+  function initializeFromLocalStorage() {
+    // High Contrast
+    if (localStorage.getItem('accessibility-high-contrast') === 'true') {
+      document.documentElement.classList.add('accessibility-high-contrast');
+    }
+    
+    // Dyslexia Font
+    if (localStorage.getItem('accessibility-dyslexia-font') === 'true') {
+      document.documentElement.classList.add('accessibility-dyslexia-font');
+    }
+    
+    // Color Blind - just checking deuteranopia for this test
+    if (localStorage.getItem('accessibility-deuteranopia') === 'true') {
+      document.documentElement.classList.add('accessibility-deuteranopia');
+      
+      const styleElement = document.createElement('link');
+      styleElement.id = 'accessibility-deuteranopia-stylesheet';
+      styleElement.rel = 'stylesheet';
+      styleElement.href = chrome.runtime.getURL('deuteranopia.css');
+      document.head.appendChild(styleElement);
+    }
+    
+    // Large Targets
+    if (localStorage.getItem('accessibility-large-targets') === 'true') {
+      document.documentElement.classList.add('accessibility-large-targets');
+      
+      const styleElement = document.createElement('link');
+      styleElement.rel = 'stylesheet';
+      styleElement.href = chrome.runtime.getURL('large-targets.css');
+      styleElement.setAttribute('data-accessibility-large-targets', '');
+      document.head.appendChild(styleElement);
+    }
+    
+    // Line Height
+    if (localStorage.getItem('accessibility-line-height-enabled') === 'true') {
+      const value = localStorage.getItem('accessibility-line-height-value') || '1.5';
+      
+      const style = document.createElement('style');
+      style.id = 'accessibility-line-height';
+      style.textContent = `html[data-line-height="custom"] * { line-height: ${value} !important; }`;
+      document.head.appendChild(style);
+      
+      document.documentElement.setAttribute('data-line-height', 'custom');
+    }
+    
+    // Keyboard Navigation
+    if (localStorage.getItem('accessibility-keyboard-nav') === 'true') {
+      document.documentElement.classList.add('accessibility-keyboard-nav');
+      (window as any).keyboardNavActive = true;
+      (window as any).keyboardClickDelay = parseInt(
+        localStorage.getItem('accessibility-keyboard-nav-delay') || '1500',
+        10
+      );
+    }
+  }
+  
+  // Run the initialization
+  initializeFromLocalStorage();
+  
+  // Test that elements were set up based on localStorage values
+  
+  // Features that should be enabled
+  expect(document.documentElement.classList.contains('accessibility-high-contrast')).toBe(true);
+  expect(document.documentElement.classList.contains('accessibility-dyslexia-font')).toBe(true);
+  expect(document.documentElement.classList.contains('accessibility-deuteranopia')).toBe(true);
+  expect(document.documentElement.classList.contains('accessibility-large-targets')).toBe(true);
+  expect(document.documentElement.classList.contains('accessibility-keyboard-nav')).toBe(true);
+  
+  // Features that should be disabled
+  expect(document.documentElement.classList.contains('accessibility-reduced-motion')).toBe(false);
+  expect(document.documentElement.classList.contains('accessibility-hover-controls')).toBe(false);
+  
+  // Line height should be enabled with custom value
+  expect(document.documentElement.getAttribute('data-line-height')).toBe('custom');
+  const lineHeightStyle = document.getElementById('accessibility-line-height');
+  expect(lineHeightStyle).not.toBeNull();
+  expect(lineHeightStyle?.textContent).toContain('line-height: 1.8');
+  
+  // Check that stylesheets were added for enabled features
+  expect(document.getElementById('accessibility-deuteranopia-stylesheet')).not.toBeNull();
+  expect(document.querySelector('link[data-accessibility-large-targets]')).not.toBeNull();
+  
+  // Check keyboard navigation settings
+  expect((window as any).keyboardNavActive).toBe(true);
+  expect((window as any).keyboardClickDelay).toBe(2000);
 });

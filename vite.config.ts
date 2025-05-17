@@ -27,6 +27,9 @@ export default defineConfig({
         'reduced-motion': 'src/content/reduced-motion.css',
         'keyboard-nav': 'src/content/keyboard-nav.css',
         'large-targets': 'src/content/large-targets.css',
+        'custom-cursor': 'src/content/custom-cursor.css',
+        'auto-scroll': 'src/content/auto-scroll.css',
+        'hover-controls': 'src/content/hover-controls.css',
       },
       output: {
         entryFileNames: '[name].js',

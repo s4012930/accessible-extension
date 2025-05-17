@@ -25,7 +25,10 @@ interface AccessibilityState {
   largeTargets: {
     enabled: boolean;
     value: number;  // 1.5 = default (middle), can be decreased or increased
-  };
+  };  
+  customCursor: boolean;
+  autoScroll: boolean;
+  hoverControls: boolean;
   // Add other accessibility features as needed
 }
 
@@ -52,8 +55,49 @@ const state: AccessibilityState = {
   largeTargets: {
     enabled: false,
     value: 1.5    // Default scale factor (1.5x)
-  }
+  },  customCursor: false,
+  autoScroll: false,
+  hoverControls: false
 };
+
+// Debounced storage function to prevent excessive writes to Chrome storage
+const storageWriteDebouncer = (() => {
+  let timeout: number | null = null;
+  let pendingWrites: any = {};
+  let isWriting = false;
+  
+  return {
+    update: (updates: any) => {
+      pendingWrites = { ...pendingWrites, ...updates };
+      
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      
+      if (!isWriting) {
+        timeout = window.setTimeout(() => {
+          const currentUpdates = { ...pendingWrites };
+          pendingWrites = {};
+          isWriting = true;
+          
+          chrome.storage.sync.set({ accessibilityState: { ...state, ...currentUpdates } })
+            .then(() => {
+              console.log("State updated and saved to storage successfully");
+              isWriting = false;
+              if (Object.keys(pendingWrites).length > 0) {
+                // If more updates came in while we were writing, process them
+                storageWriteDebouncer.update({});
+              }
+            })
+            .catch(error => {
+              console.error("Error saving state to chrome.storage.sync:", error);
+              isWriting = false;
+            });
+        }, 300); // Debounce by 300ms
+      }
+    }
+  };
+})();
 
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -121,6 +165,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     state.reducedMotion = false;
     state.keyboardNav = false;
     state.largeTargets.enabled = false;
+    state.customCursor = false;
+    state.autoScroll = false;
     
     // Save state to storage immediately
     chrome.storage.sync.set({ accessibilityState: state });
@@ -137,7 +183,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       applyLineHeightToAllTabs(false, state.lineHeight.value),
       applyReducedMotionToAllTabs(false),
       applyKeyboardNavToAllTabs(false),
-      applyLargeTargetsToAllTabs(false)
+      applyLargeTargetsToAllTabs(false),
+      applyCustomCursorToAllTabs(false),
+      applyAutoScrollToAllTabs(false)
     ]).then(() => {
       // Send response only after all operations complete
       sendResponse({ status: "success", state });
@@ -376,6 +424,65 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       
       sendResponse({ status: "success", state });
       return true;
+    }    if (feature === "customCursor") {
+      state.customCursor = request.enabled;
+      
+      // Apply to all tabs
+      applyCustomCursorToAllTabs(request.enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state }, () => {
+        // Ensure popup gets updated state
+        chrome.runtime.sendMessage({ 
+          action: "stateUpdated", 
+          state: state 
+        }).catch(() => {
+          // Ignore errors if popup is not open
+        });
+      });
+      
+      sendResponse({ status: "success", state });
+      return true;
+    }
+    
+    if (feature === "autoScroll") {
+      state.autoScroll = request.enabled;
+      
+      // Apply to all tabs
+      applyAutoScrollToAllTabs(request.enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state }, () => {
+        // Ensure popup gets updated state
+        chrome.runtime.sendMessage({ 
+          action: "stateUpdated", 
+          state: state 
+        }).catch(() => {
+          // Ignore errors if popup is not open
+        });
+      });
+      
+      sendResponse({ status: "success", state });
+      return true;
+    }    if (feature === "hoverControls") {
+      state.hoverControls = enabled;
+      
+      // Apply to all tabs
+      applyHoverControlsToAllTabs(enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state }, () => {
+        // Ensure popup gets updated state
+        chrome.runtime.sendMessage({ 
+          action: "stateUpdated", 
+          state: state 
+        }).catch(() => {
+          // Ignore errors if popup is not open
+        });
+      });
+      
+      sendResponse({ status: "success", state });
+      return true;
     }
     // Add other features here in the future
   }
@@ -475,6 +582,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Ignore errors if popup is not open to receive the message
       });
       // sendResponse is not needed here as this is a state update, not a direct request needing a response to the sender.
+      return true;    }
+      
+    if (request.feature === "customCursor") {
+      state.customCursor = request.enabled;
+      chrome.storage.sync.set({ accessibilityState: state });
+      
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
       return true;
     }
       if (request.feature === "largeTargets") {
@@ -491,6 +611,39 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }).catch(() => {
         // Ignore errors if popup is not open to receive the message
       });
+      return true;
+    }    if (request.feature === "autoScroll") {
+      state.autoScroll = request.enabled;
+      chrome.storage.sync.set({ accessibilityState: state });
+      
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      
+      // If this was enabled, apply it to all tabs
+      if (request.enabled) {
+        applyAutoScrollToAllTabs(true);
+      }
+      
+      return true;
+    }
+
+    if (request.feature === "hoverControls") {
+      state.hoverControls = request.enabled;
+      chrome.storage.sync.set({ accessibilityState: state });
+      
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      
       return true;
     }
   }
@@ -1006,6 +1159,142 @@ async function applyLargeTargetsToAllTabs(enabled: boolean): Promise<void> {
   }
 }
 
+// Function to apply custom cursor to all tabs
+async function applyCustomCursorToAllTabs(enabled: boolean): Promise<void> {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (!tab.id || !tab.url || !tab.url.startsWith('http')) continue;
+      const tabId = tab.id;
+      
+      // Send message to content script with proper error handling
+      try {
+        // First, check if CSS needs to be injected directly (more reliable than messaging)
+        if (enabled) {
+          try {
+            await chrome.scripting.insertCSS({
+              target: { tabId },
+              files: ['custom-cursor.css']
+            });
+            console.log(`CSS injected directly for custom cursor in tab ${tabId}`);
+          } catch (cssErr) {
+            console.log(`Could not inject CSS directly, will try via content script: ${cssErr}`);
+          }
+        }
+        
+        // Send the message to the content script
+        chrome.tabs.sendMessage(tabId, {
+          action: "toggleCustomCursor",
+          enabled
+        }, (response) => {
+          // Always check chrome.runtime.lastError in callbacks
+          if (chrome.runtime.lastError) {
+            console.log(`Tab ${tabId} not ready for custom cursor: ${chrome.runtime.lastError.message}`);
+            // Content script not ready, inject it first and retry
+            chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['content-script.js']
+            }).then(() => {
+              // Wait a moment for the script to initialize
+              setTimeout(() => {
+                try {
+                  chrome.tabs.sendMessage(tabId, {
+                    action: "toggleCustomCursor",
+                    enabled
+                  }, (retryResponse) => {
+                    // Check for lastError again without accessing it directly
+                    if (chrome.runtime.lastError) {
+                      console.log(`Retry failed for custom cursor in tab ${tabId}: ${chrome.runtime.lastError.message}`);
+                    } else if (retryResponse && retryResponse.status === "success") {
+                      console.log(`Successfully applied custom cursor=${enabled} to tab ${tabId} on retry`);
+                    }
+                  });
+                } catch (retryErr) {
+                  console.log(`Exception during retry for tab ${tabId}:`, retryErr);
+                }
+              }, 300); // Increased delay to ensure content script is ready
+            }).catch(err => console.error('Error injecting content script:', err));
+          } else if (response && response.status === "success") {
+            console.log(`Successfully applied custom cursor=${enabled} to tab ${tabId}`);
+          }
+        });
+      } catch (error) {
+        console.error(`Error in tab ${tabId}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error("Error applying custom cursor to all tabs:", error);
+  }
+}
+
+// Function to apply auto-scroll to all tabs
+async function applyAutoScrollToAllTabs(enabled: boolean): Promise<void> {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (!tab.id || !tab.url || !tab.url.startsWith('http')) continue;
+      const tabId = tab.id;
+      
+      // Send message to content script with proper error handling
+      try {
+        // First, check if CSS needs to be injected directly (more reliable than messaging)
+        if (enabled) {
+          try {
+            await chrome.scripting.insertCSS({
+              target: { tabId },
+              files: ['auto-scroll.css']
+            });
+            console.log(`CSS injected directly for auto-scroll in tab ${tabId}`);
+          } catch (cssErr) {
+            console.log(`Could not inject CSS directly, will try via content script: ${cssErr}`);
+          }
+        }
+        
+        // Send the message to the content script
+        chrome.tabs.sendMessage(tabId, {
+          action: "toggleAutoScroll",
+          enabled
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log(`Content script not ready in tab ${tabId}, injecting it first: ${chrome.runtime.lastError.message}`);
+            
+            // Inject the content script and try again
+            chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['content-script.js']
+            }).then(() => {
+              // Wait a bit for the script to initialize
+              setTimeout(() => {
+                // Try sending the message again after script injection
+                chrome.tabs.sendMessage(tabId, {
+                  action: "toggleAutoScroll",
+                  enabled
+                }, (secondResponse) => {
+                  if (chrome.runtime.lastError) {
+                    console.log(`Failed to apply auto-scroll after script injection: ${chrome.runtime.lastError.message}`);
+                  } else if (secondResponse && secondResponse.status === "success") {
+                    console.log(`Successfully applied auto-scroll=${enabled} to tab ${tabId} after script injection`);
+                  }
+                });
+              }, 300); // Increased delay to give more time for content script to initialize
+            }).catch(err => {
+              console.log(`Script injection failed for tab ${tabId}:`, err);
+              // The tab might not support content scripts (e.g. chrome:// URLs)
+            });
+          } else if (response && response.status === "success") {
+            console.log(`Successfully applied auto-scroll=${enabled} to tab ${tabId}`);
+          }
+        });
+      } catch (err) {
+        // This catch is just a safeguard, most errors should be caught by the callback
+        console.log(`Error applying auto-scroll to tab ${tabId}:`, err);
+      }
+    }
+  } catch (error) {
+    console.log(`Error getting tabs:`, error);
+  }
+}
+
 // Initialize by loading state from storage
 chrome.storage.sync.get("accessibilityState", (result) => {
   if (result.accessibilityState) {
@@ -1119,6 +1408,28 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         }).catch(err => console.error("Error applying large targets:", err));
       } catch (err) {
         console.error("Error applying large targets:", err);
+      }
+    }
+
+    if (state.customCursor) {
+      try {
+        chrome.tabs.sendMessage(activeInfo.tabId, {
+          action: "toggleCustomCursor",
+          enabled: true
+        }).catch(err => console.error("Error applying custom cursor:", err));
+      } catch (err) {
+        console.error("Error applying custom cursor:", err);
+      }
+    }
+
+    if (state.autoScroll) {
+      try {
+        chrome.tabs.sendMessage(activeInfo.tabId, {
+          action: "toggleAutoScroll",
+          enabled: true
+        }).catch(err => console.error("Error applying auto-scroll:", err));
+      } catch (err) {
+        console.error("Error applying auto-scroll:", err);
       }
     }
   } catch (err) {
@@ -1259,8 +1570,110 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
           }
         });
       }
+
+      // Apply custom cursor if enabled
+      if (state.customCursor) {
+        chrome.tabs.sendMessage(tabId, {
+          action: "toggleCustomCursor",
+          enabled: true
+        }).catch(err => console.log("Non-critical: Error applying custom cursor on page load:", err));
+      }      // Apply auto-scroll if enabled
+      if (state.autoScroll) {
+        chrome.tabs.sendMessage(tabId, {
+          action: "toggleAutoScroll",
+          enabled: true
+        }).catch(err => console.log("Non-critical: Error applying auto-scroll on page load:", err));
+      }
+        // Apply hover controls if enabled
+      if (state.hoverControls) {
+        // First ensure CSS is loaded
+        chrome.scripting.insertCSS({
+          target: { tabId },
+          files: ["/hover-controls.css"]
+        }).then(() => {
+          chrome.tabs.sendMessage(tabId, {
+            action: "toggleHoverControls",
+            enabled: true
+          }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.log("Retrying hover controls after error:", chrome.runtime.lastError.message);
+              // Try again with a delay
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tabId, {
+                  action: "toggleHoverControls",
+                  enabled: true
+                }).catch(err => console.log("Still failed to apply hover controls:", err));
+              }, 500);
+            } else if (response && response.status === "success") {
+              console.log("Successfully applied hover controls on tab update");
+            }
+          });
+        }).catch(err => console.log("Non-critical: Error inserting hover controls CSS:", err));
+      }
     }).catch(err => {
       console.log(`Error injecting content script into tab ${tabId} (this is normal for some pages):`, err);
     });
   }
 });
+
+// Apply hover controls to all tabs
+function applyHoverControlsToAllTabs(enabled: boolean, originTabId?: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    // Keep track of tabs we've processed
+    const processedTabs = new Set<number>();
+    
+    chrome.tabs.query({}, async (tabs) => {
+      for (const tab of tabs) {
+        const tabId = tab.id;
+        if (!tabId) continue;
+        
+        // Skip the originating tab and already processed tabs
+        if (originTabId !== undefined && tabId === originTabId) {
+          console.log(`Skipping originating tab ${tabId} to prevent message loop`);
+          continue;
+        }
+        
+        if (processedTabs.has(tabId)) {
+          console.log(`Tab ${tabId} already processed, skipping`);
+          continue;
+        }
+        
+        // Mark this tab as processed
+        processedTabs.add(tabId);
+        
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId },
+            files: ['content-script.js']
+          });
+          console.log(`Content script injected into tab ${tabId} for hover controls`);
+          
+          // Wait for script to initialize
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Send the actual toggle message
+          chrome.tabs.sendMessage(
+            tabId, 
+            { 
+              action: "toggleHoverControls", 
+              enabled,
+              // Add this flag to indicate it's from the background script
+              fromBackground: true 
+            },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                console.log(`Hover controls message error in tab ${tabId}: ${chrome.runtime.lastError.message}`);
+              } else if (response && response.status === "success") {
+                console.log(`Successfully applied hover controls to tab ${tabId}`);
+              }
+            }
+          );
+        } catch (err) {
+          console.error(`Error applying hover controls to tab ${tabId}:`, err);
+        }
+      }
+      
+      resolve();
+    });
+  });
+}

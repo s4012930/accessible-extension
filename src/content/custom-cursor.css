@@ -1,0 +1,66 @@
+/* Custom cursor styles */
+html.accessibility-custom-cursor {
+  /* Default cursor */
+  cursor: url('chrome-extension://__MSG_@@extension_id__/cursors/default.cur'), auto !important;
+}
+
+html.accessibility-custom-cursor.accessibility-high-contrast {
+  /* High contrast cursor */
+  cursor: url('chrome-extension://__MSG_@@extension_id__/cursors/default-high-contrast.cur'), auto !important;
+}
+
+/* Link cursor */
+html.accessibility-custom-cursor a,
+html.accessibility-custom-cursor button,
+html.accessibility-custom-cursor [role="button"],
+html.accessibility-custom-cursor input[type="button"],
+html.accessibility-custom-cursor input[type="submit"],
+html.accessibility-custom-cursor .clickable,
+html.accessibility-custom-cursor [class*="btn"],
+html.accessibility-custom-cursor [class*="button"] {
+  cursor: url('chrome-extension://__MSG_@@extension_id__/cursors/pointer.cur'), pointer !important;
+}
+
+/* High contrast link cursor */
+html.accessibility-custom-cursor.accessibility-high-contrast a,
+html.accessibility-custom-cursor.accessibility-high-contrast button,
+html.accessibility-custom-cursor.accessibility-high-contrast [role="button"],
+html.accessibility-custom-cursor.accessibility-high-contrast input[type="button"],
+html.accessibility-custom-cursor.accessibility-high-contrast input[type="submit"],
+html.accessibility-custom-cursor.accessibility-high-contrast .clickable,
+html.accessibility-custom-cursor.accessibility-high-contrast [class*="btn"],
+html.accessibility-custom-cursor.accessibility-high-contrast [class*="button"] {
+  cursor: url('chrome-extension://__MSG_@@extension_id__/cursors/pointer-high-contrast.cur'), pointer !important;
+}
+
+/* Text cursor */
+html.accessibility-custom-cursor input,
+html.accessibility-custom-cursor textarea,
+html.accessibility-custom-cursor [contenteditable="true"],
+html.accessibility-custom-cursor p,
+html.accessibility-custom-cursor h1,
+html.accessibility-custom-cursor h2,
+html.accessibility-custom-cursor h3,
+html.accessibility-custom-cursor h4,
+html.accessibility-custom-cursor h5,
+html.accessibility-custom-cursor h6,
+html.accessibility-custom-cursor li,
+html.accessibility-custom-cursor span {
+  cursor: url('chrome-extension://__MSG_@@extension_id__/cursors/text.cur'), text !important;
+}
+
+/* High contrast text cursor */
+html.accessibility-custom-cursor.accessibility-high-contrast input,
+html.accessibility-custom-cursor.accessibility-high-contrast textarea,
+html.accessibility-custom-cursor.accessibility-high-contrast [contenteditable="true"],
+html.accessibility-custom-cursor.accessibility-high-contrast p,
+html.accessibility-custom-cursor.accessibility-high-contrast h1,
+html.accessibility-custom-cursor.accessibility-high-contrast h2,
+html.accessibility-custom-cursor.accessibility-high-contrast h3,
+html.accessibility-custom-cursor.accessibility-high-contrast h4,
+html.accessibility-custom-cursor.accessibility-high-contrast h5,
+html.accessibility-custom-cursor.accessibility-high-contrast h6,
+html.accessibility-custom-cursor.accessibility-high-contrast li,
+html.accessibility-custom-cursor.accessibility-high-contrast span {
+  cursor: url('chrome-extension://__MSG_@@extension_id__/cursors/text-high-contrast.cur'), text !important;
+}
