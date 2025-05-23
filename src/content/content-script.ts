@@ -2,6 +2,7 @@
 declare global {
   interface Window {
     __accessibilityExtensionLoaded?: boolean;
+    __imageObserver?: MutationObserver | null;
   }
 }
 
@@ -100,7 +101,37 @@ declare global {
         sendResponse({ enabled: keyboardNavEnabled });
       } catch (error: any) {
         console.error("Error in getKeyboardNavState handler:", error);
-        sendResponse({ enabled: false, error: error.toString() });
+        sendResponse({ enabled: false, error: error.toString() });      }
+      return true;
+    }    if (request.action === "toggleFocusMode") {
+      try {
+        console.log('Focus mode request received:', request.enabled);
+        // Check current class state before toggle
+        const currentClassState = document.documentElement.classList.contains('accessibility-focus-mode');
+        console.log('Current focus mode class state before toggle:', currentClassState);
+        console.log('Current focus mode localStorage state before toggle:', localStorage.getItem('accessibility-focus-mode'));
+        
+        toggleFocusMode(request.enabled);
+        
+        // Double-check that the class state changed correctly
+        const newClassState = document.documentElement.classList.contains('accessibility-focus-mode');
+        console.log('Focus mode class state after toggle:', newClassState);
+        console.log('Focus mode localStorage state after toggle:', localStorage.getItem('accessibility-focus-mode'));
+        
+        // Alert the background page with the current state
+        chrome.runtime.sendMessage({
+          action: "updateState",
+          feature: "focusMode",
+          enabled: newClassState
+        }).catch(err => console.log("Error updating focus mode state in background after toggle:", err));
+        
+        sendResponse({ 
+          status: "success",
+          enabled: newClassState // Send back the actual current state
+        });
+      } catch (error: any) {
+        console.error("Error in toggleFocusMode handler:", error);
+        sendResponse({ status: "error", message: error.toString() });
       }
       return true;
     }
@@ -133,13 +164,29 @@ declare global {
       }
       return true;
     }
-      if (request.action === "toggleHoverControls") {
-      try {
-        console.log('Hover controls request received:', request.enabled);
-        toggleHoverControls(request.enabled);
+      if (request.action === "toggleHoverControls") {      try {
+        console.log(`Hover controls request received: enabled=${request.enabled}, fromBackground=${request.fromBackground || false}`);
+        
+        // Get current local storage state
+        const currentLocalState = localStorage.getItem('accessibility-hover-controls');
+        
+        // Check if the request is to enable hover controls and if they were recently turned off
+        if (request.enabled && !request.fromBackground && currentLocalState === 'turnedOff') {
+          console.log('Hover controls were recently turned off via "Turn All Off". User must explicitly re-enable.');
+          sendResponse({ 
+            status: "success", 
+            feature: "hoverControls",
+            enabled: false
+          });
+          return true;
+        }
+        
+        toggleHoverControls(request.enabled, request.fromBackground || false);
+        
         // Always send a successful response regardless of internal implementation details
         sendResponse({ 
           status: "success", 
+          feature: "hoverControls",
           enabled: request.enabled 
         });
         return true;
@@ -148,6 +195,55 @@ declare global {
         sendResponse({ status: "error", message: error.toString() });
         return true;
       }
+    }
+    
+    if (request.action === "toggleHighlightLinks") {
+      try {
+        console.log('Highlight links request received:', request.enabled);
+        toggleHighlightLinks(request.enabled);
+        sendResponse({ 
+          status: "success", 
+          enabled: request.enabled 
+        });
+      } catch (error: any) {
+        console.error("Error in toggleHighlightLinks handler:", error);
+        sendResponse({ status: "error", message: error.toString() });
+      }
+      return true;
+    }
+    
+    if (request.action === "toggleReadingProgress") {
+      try {
+        console.log('Reading progress request received:', request.enabled);
+        toggleReadingProgress(request.enabled);
+        sendResponse({ 
+          status: "success", 
+          enabled: request.enabled 
+        });
+      } catch (error: any) {
+        console.error("Error in toggleReadingProgress handler:", error);
+        sendResponse({ status: "error", message: error.toString() });
+      }
+      return true;
+    }
+    
+    if (request.action === "toggleImageDescriptions") {
+      try {
+        const enabled = request.enabled;
+        const fromBackground = request.fromBackground || false;
+        toggleImageDescriptions(enabled, fromBackground);
+        sendResponse({
+          status: "success",
+          message: `Image descriptions ${enabled ? 'enabled' : 'disabled'}`
+        });
+      } catch (err) {
+        console.error('Error toggling image descriptions:', err);
+        sendResponse({
+          status: "error",
+          message: `Failed to toggle image descriptions: ${err}`
+        });
+      }
+      return true;
     }
     
     // Add other accessibility toggles here in the future
@@ -1271,6 +1367,119 @@ declare global {
     }
   }
 
+  // Focus mode variables
+  let focusModeLine: HTMLElement | null = null;
+  let focusModeContainer: HTMLElement | null = null;
+  const FOCUS_MODE_LINE_HEIGHT = 90;  // Function to toggle focus mode
+  function toggleFocusMode(enabled: boolean): void {
+    console.log(`Toggling focus mode: ${enabled ? 'ON' : 'OFF'}`);
+    
+    // Check current state to avoid redundant operations
+    const currentState = document.documentElement.classList.contains('accessibility-focus-mode');
+    console.log('Current focus mode state detected as:', currentState);
+    
+    // Always update localStorage and class state for consistency
+    localStorage.setItem('accessibility-focus-mode', enabled ? 'true' : 'false');
+    
+    // Force the HTML class to match the requested state (critical for persistence)
+    if (enabled) {
+      document.documentElement.classList.add('accessibility-focus-mode');
+    } else {
+      document.documentElement.classList.remove('accessibility-focus-mode');
+    }
+    
+    // Always update state in background script to ensure sync across components
+    chrome.runtime.sendMessage({
+      action: "updateState",
+      feature: "focusMode",
+      enabled: enabled
+    }).catch(err => console.log("Error updating focus mode state in background:", err));
+    
+    // Also update global state via the debounced storage update
+    debouncedStorageUpdate({ focusMode: enabled });
+    
+    // Skip further processing if visual state already matches
+    if (currentState === enabled) {
+      console.log('No visual change needed for focus mode, state already matches requested state');
+      return;
+    }
+    
+    // Remove existing focus mode elements if any
+    if (focusModeContainer && focusModeContainer.parentNode) {
+      focusModeContainer.parentNode.removeChild(focusModeContainer);
+    }
+    focusModeContainer = null;
+    focusModeLine = null;
+
+    document.querySelectorAll('link[data-accessibility-focus-mode]').forEach((element) => {
+      element.remove();
+    });
+    
+    document.removeEventListener('mousemove', updateFocusModePosition);
+      if (enabled) {
+      try {
+        
+        // Inject the stylesheet first
+        const linkElement = document.createElement('link');
+        linkElement.setAttribute('rel', 'stylesheet');
+        linkElement.setAttribute('href', chrome.runtime.getURL('focus-mode.css'));
+        linkElement.setAttribute('data-accessibility-focus-mode', 'true');
+        document.head.appendChild(linkElement);
+        
+        // Create container
+        focusModeContainer = document.createElement('div');
+        focusModeContainer.className = 'accessibility-focus-mode-container';
+        focusModeContainer.id = 'accessibility-focus-mode-container';
+        
+        // Create focus line and assign it to the module-scoped variable
+        focusModeLine = document.createElement('div');
+        focusModeLine.className = 'accessibility-focus-mode-line';
+        if (isDarkMode()) {
+          focusModeLine.classList.add('dark-mode');
+        }
+        
+        focusModeContainer.appendChild(focusModeLine);
+        document.body.appendChild(focusModeContainer);
+        
+        // Set initial position
+        focusModeLine.style.top = `${(window.innerHeight / 2) - (FOCUS_MODE_LINE_HEIGHT / 2)}px`;
+        
+        // Add event listeners
+        document.addEventListener('mousemove', updateFocusModePosition);
+          
+        console.log('Focus mode enabled successfully');
+      } catch (error) {
+        console.error('Error enabling focus mode:', error);
+      }
+    }
+    
+    // Update global state and debounce storage update
+    debouncedStorageUpdate({ focusMode: enabled });
+    
+    // Explicitly notify background script about state change
+    try {
+      chrome.runtime.sendMessage({
+        action: "updateState",
+        feature: "focusMode",
+        enabled: enabled
+      }).catch(() => {
+        // Ignore errors if background isn't ready
+        console.log("Background script not ready for focus mode update");
+      });
+    } catch (err) {
+      console.log("Error sending focusMode update to background:", err);
+    }
+  }
+
+  // Function to update the focus mode line position based on mouse movement
+  function updateFocusModePosition(e: MouseEvent) {
+    if (focusModeLine) {
+      const mouseY = e.clientY;
+      const lineTop = mouseY - (FOCUS_MODE_LINE_HEIGHT / 2);
+      focusModeLine.style.top = `${lineTop}px`;
+    }
+  }
+
   // Check if accessibility features were previously enabled on this page
   function initAccessibilitySettings(): void {
     // First check Chrome storage for global settings
@@ -1395,6 +1604,12 @@ declare global {
         } else if (globalSettings.hoverControls === false) {
           toggleHoverControls(false);
         }
+          // Apply image descriptions if enabled globally
+        if (globalSettings.imageDescriptions === true) {
+          toggleImageDescriptions(true, true);
+        } else if (globalSettings.imageDescriptions === false) {
+          toggleImageDescriptions(false, true);
+        }
       } else {
         // Fall back to localStorage if no global settings found
         
@@ -1500,6 +1715,18 @@ declare global {
           toggleHoverControls(true);
         }
         
+        // Apply highlight links settings from localStorage
+        const highlightLinksState = localStorage.getItem('accessibility-highlight-links') === 'true';
+        if (highlightLinksState) {
+          toggleHighlightLinks(true);
+        }
+          // Apply image descriptions settings from localStorage
+        const imageDescriptionsState = localStorage.getItem('accessibility-image-descriptions');
+        // Only enable if the value is 'true', not if it's 'turnedOff'
+        if (imageDescriptionsState === 'true') {
+          toggleImageDescriptions(true, true);
+        }
+        
         // Update global storage with local settings - ensure colourblind state reflects that only one filter is active
         const colorBlindState = {
           enabled: deuteranopiaEnabled || protanopiaEnabled || tritanopiaEnabled,
@@ -1508,6 +1735,14 @@ declare global {
           tritanopia: deuteranopiaEnabled || protanopiaEnabled ? false : tritanopiaEnabled
         };
           const hoverControlsEnabled = localStorage.getItem('accessibility-hover-controls') === 'true';
+          const highlightLinksEnabled = document.documentElement.classList.contains('accessibility-highlight-links') ||
+                                      localStorage.getItem('accessibility-highlight-links') === 'true';
+          const readingProgressEnabled = document.documentElement.classList.contains('accessibility-reading-progress') ||
+                                      localStorage.getItem('accessibility-reading-progress') === 'true';
+          const imageDescriptionsEnabled = document.documentElement.classList.contains('accessibility-image-descriptions') ||
+                                      localStorage.getItem('accessibility-image-descriptions') === 'true';
+          // Don't include in state if it was turned off through Turn All Off
+          const imageDescriptionsTurnedOff = localStorage.getItem('accessibility-image-descriptions') === 'turnedOff';
         
         chrome.storage.sync.set({
           accessibilityState: {
@@ -1522,7 +1757,10 @@ declare global {
             largeTargets: largeTargetsEnabled,
             customCursor: customCursorEnabled,
             autoScroll: autoScrollEnabled,
-            hoverControls: hoverControlsEnabled
+            hoverControls: hoverControlsEnabled,
+            highlightLinks: highlightLinksEnabled,
+            readingProgress: readingProgressEnabled,
+            imageDescriptions: imageDescriptionsTurnedOff ? false : imageDescriptionsEnabled
           }
         });
       }
@@ -1551,6 +1789,8 @@ declare global {
                               localStorage.getItem('accessibility-auto-scroll') === 'true';
       const hoverControlsEnabled = document.documentElement.classList.contains('accessibility-hover-controls') ||
                                 localStorage.getItem('accessibility-hover-controls') === 'true';
+      const highlightLinksEnabled = document.documentElement.classList.contains('accessibility-highlight-links') ||
+                                  localStorage.getItem('accessibility-highlight-links') === 'true';
       
       // Check colourblind modes
       const deuteranopiaEnabled = document.documentElement.classList.contains('accessibility-deuteranopia');
@@ -1628,6 +1868,30 @@ declare global {
         action: "updateState",
         feature: "hoverControls",
         enabled: hoverControlsEnabled
+      });
+
+      chrome.runtime.sendMessage({
+        action: "updateState",
+        feature: "highlightLinks",
+        enabled: highlightLinksEnabled
+      });
+
+      const readingProgressEnabled = document.documentElement.classList.contains('accessibility-reading-progress') ||
+                                  localStorage.getItem('accessibility-reading-progress') === 'true';
+      chrome.runtime.sendMessage({
+        action: "updateState",
+        feature: "readingProgress",
+        enabled: readingProgressEnabled
+      });      const imageDescriptionsState = localStorage.getItem('accessibility-image-descriptions');
+      const imageDescriptionsEnabled = document.documentElement.classList.contains('accessibility-image-descriptions') ||
+                                   imageDescriptionsState === 'true';
+      // Don't re-enable if it was turned off through Turn All Off
+      const imageDescriptionIsTurnedOff = imageDescriptionsState === 'turnedOff';
+      
+      chrome.runtime.sendMessage({
+        action: "updateState",
+        feature: "imageDescriptions",
+        enabled: imageDescriptionIsTurnedOff ? false : imageDescriptionsEnabled
       });
     }, 100);
   }
@@ -1715,6 +1979,11 @@ declare global {
         // Store the state in localStorage
         localStorage.setItem('accessibility-hover-controls', 'true');
         
+        // If the user is manually enabling after a "Turn All Off", clear that state
+        if (!fromBackground) {
+          localStorage.removeItem('accessibility-hover-turnedOff');
+        }
+        
         // Test by highlighting a sample element
         setTimeout(() => {
           console.log('Testing hover controls detection...');
@@ -1741,7 +2010,7 @@ declare global {
         console.log('Hover controls event listeners removed');
         
         // Store the state in localStorage
-        localStorage.setItem('accessibility-hover-controls', 'false');
+        localStorage.setItem('accessibility-hover-controls', fromBackground ? 'turnedOff' : 'false');
       }
       
       // Only send update to background if this wasn't triggered by the background
@@ -2083,6 +2352,595 @@ declare global {
     removeHoverElements();
   }
 
-  // Add console message to help with debugging
+  // Function to toggle highlight links
+  function toggleHighlightLinks(enable: boolean): void {
+    console.log(`Toggling highlight links: ${enable ? 'ON' : 'OFF'}`);
+    
+    // Check current state to avoid redundant operations
+    const currentState = document.documentElement.classList.contains('accessibility-highlight-links');
+    if (currentState === enable) {
+      // No change needed, but ensure storage is consistent
+      localStorage.setItem('accessibility-highlight-links', String(enable));
+      return;
+    }
+    
+    // Update HTML class
+    if (enable) {
+      document.documentElement.classList.add('accessibility-highlight-links');
+    } else {
+      document.documentElement.classList.remove('accessibility-highlight-links');
+    }
+    
+    // Store setting in localStorage
+    localStorage.setItem('accessibility-highlight-links', String(enable));
+    
+    // Add or remove stylesheet
+    let highlightLinksStylesheet = document.querySelector('link[data-accessibility-highlight-links]');
+    
+    if (enable) {
+      if (!highlightLinksStylesheet) {
+        try {
+          const cssURL = chrome.runtime.getURL('highlight-links.css');
+          console.log('CSS URL:', cssURL);
+          
+          const linkElement = document.createElement('link');
+          linkElement.setAttribute('rel', 'stylesheet');
+          linkElement.setAttribute('data-accessibility-highlight-links', 'true');
+          linkElement.setAttribute('href', cssURL);
+          document.head.appendChild(linkElement);
+          console.log('Highlight links mode enabled successfully');
+        } catch (error) {
+          console.error('Error applying highlight links mode:', error);
+        }
+      }
+    } else {
+      // Remove the stylesheet when disabled
+      document.querySelectorAll('link[data-accessibility-highlight-links]').forEach(el => {
+        try {
+          el.remove();
+        } catch (err) {
+          console.error("Error removing stylesheet:", err);
+        }
+      });
+    }
+    
+    // Update global state and debounce storage update
+    debouncedStorageUpdate({ highlightLinks: enable });
+    
+    // Notify background script of state change
+    try {
+      chrome.runtime.sendMessage({
+        action: "updateState",
+        feature: "highlightLinks",
+        enabled: enable
+      }).catch(() => {
+        // Ignore errors if background isn't ready
+      });
+    } catch (err) {
+      console.log("Error sending highlightLinks update to background:", err);
+    }
+  }
+  
+  // Function to toggle reading progress
+  function toggleReadingProgress(enable: boolean): void {
+    console.log(`Toggling reading progress: ${enable ? 'ON' : 'OFF'}`);
+    
+    // Check current state to avoid redundant operations
+    const currentState = document.documentElement.classList.contains('accessibility-reading-progress');
+    if (currentState === enable) {
+      // No change needed, but ensure storage is consistent
+      localStorage.setItem('accessibility-reading-progress', String(enable));
+      return;
+    }
+    
+    // Update HTML class
+    if (enable) {
+      document.documentElement.classList.add('accessibility-reading-progress');
+    } else {
+      document.documentElement.classList.remove('accessibility-reading-progress');
+    }
+    
+    // Store setting in localStorage
+    localStorage.setItem('accessibility-reading-progress', String(enable));
+    
+    // Add or remove stylesheet and progress indicator
+    let readingProgressStylesheet = document.querySelector('link[data-accessibility-reading-progress]');
+    let progressContainer = document.querySelector('.accessibility-reading-progress-container');
+    
+    if (enable) {
+      // Add stylesheet if it doesn't exist
+      if (!readingProgressStylesheet) {
+        try {
+          const cssURL = chrome.runtime.getURL('reading-progress.css');
+          console.log('Reading Progress CSS URL:', cssURL);
+          
+          const linkElement = document.createElement('link');
+          linkElement.setAttribute('rel', 'stylesheet');
+          linkElement.setAttribute('data-accessibility-reading-progress', 'true');
+          linkElement.setAttribute('href', cssURL);
+          document.head.appendChild(linkElement);
+        } catch (error) {
+          console.error('Error applying reading progress stylesheet:', error);
+        }
+      }
+      
+      // Create progress indicator if it doesn't exist
+      if (!progressContainer) {
+        try {
+          // Create container with progress bar
+          const container = document.createElement('div');
+          container.className = 'accessibility-reading-progress-container';
+          
+          const progressBar = document.createElement('div');
+          progressBar.className = 'accessibility-reading-progress-bar';
+          container.appendChild(progressBar);
+          
+          // Add to DOM
+          document.body.insertBefore(container, document.body.firstChild);
+          
+          // Initialize scroll tracking
+          updateReadingProgress();
+          
+          // Add scroll event listener
+          window.addEventListener('scroll', updateReadingProgress);
+        } catch (error) {
+          console.error('Error creating reading progress indicator:', error);
+        }
+      }
+    } else {
+      // Remove the stylesheet when disabled
+      if (readingProgressStylesheet) {
+        readingProgressStylesheet.remove();
+      }
+      
+      // Remove the progress indicator
+      if (progressContainer) {
+        progressContainer.remove();
+      }
+      
+      // Remove scroll event listener
+      window.removeEventListener('scroll', updateReadingProgress);
+    }
+    
+    // Update global state and debounce storage update
+    debouncedStorageUpdate({ readingProgress: enable });
+    
+    // Notify background script of state change
+    try {
+      chrome.runtime.sendMessage({
+        action: "updateState",
+        feature: "readingProgress",
+        enabled: enable
+      }).catch(() => {
+        // Ignore errors if background isn't ready
+      });
+    } catch (err) {
+      console.log("Error sending readingProgress update to background:", err);
+    }
+  }
+    // Function to update reading progress indicator based on scroll position
+  function updateReadingProgress(): void {
+    const progressBar = document.querySelector('.accessibility-reading-progress-bar') as HTMLElement;
+    if (!progressBar) return;
+    
+    // Calculate how far the user has scrolled
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight;
+    const clientHeight = document.documentElement.clientHeight;
+    
+    // Calculate scroll percentage
+    const scrollPercentage = (scrollTop / (scrollHeight - clientHeight)) * 100;
+    
+    // Update progress bar width
+    progressBar.style.width = `${Math.min(scrollPercentage, 100)}%`;
+  }
+    // Variables to track active tooltip state
+  let activeTooltipElement: Element | null = null;
+  let lastTooltipEvent: MouseEvent | null = null;
+  // Function to toggle image descriptions
+  function toggleImageDescriptions(enable: boolean, fromBackground = false): void {
+    console.log(`Toggling image descriptions: ${enable ? 'ON' : 'OFF'}, fromBackground: ${fromBackground}`);
+    
+    // Get current local storage state
+    const currentLocalState = localStorage.getItem('accessibility-image-descriptions');
+    
+    // Check if the request is to enable image descriptions and if they were recently turned off
+    if (enable && !fromBackground && currentLocalState === 'turnedOff') {
+      console.log('Image descriptions were recently turned off via "Turn All Off". User must explicitly re-enable.');
+      
+      // Notify background that we're not enabling the feature
+      try {
+        chrome.runtime.sendMessage({
+          action: "updateState",
+          feature: "imageDescriptions",
+          enabled: false
+        }).catch(() => {
+          // Ignore errors if background isn't ready
+        });
+      } catch (error) {
+        console.warn('Failed to notify background of image descriptions state change:', error);
+      }
+      
+      return;
+    }
+    
+    // Check current DOM state to avoid redundant operations
+    const currentState = document.documentElement.classList.contains('accessibility-image-descriptions');
+    if (currentState === enable) {
+      // No DOM change needed, but ensure storage is consistent
+      localStorage.setItem('accessibility-image-descriptions', fromBackground && !enable ? 'turnedOff' : String(enable));
+      return;
+    }
+    
+    // Update HTML class
+    if (enable) {
+      document.documentElement.classList.add('accessibility-image-descriptions');
+    } else {
+      document.documentElement.classList.remove('accessibility-image-descriptions');
+    }
+    
+    // Store setting in localStorage with special handling for Turn All Off
+    localStorage.setItem('accessibility-image-descriptions', fromBackground && !enable ? 'turnedOff' : String(enable));
+    
+    // Add or remove stylesheet and image description tooltips
+    let imageDescriptionsStylesheet = document.querySelector('link[data-accessibility-image-descriptions]');
+    let tooltipContainer = document.querySelector('.accessibility-image-description-tooltip');
+    
+    if (enable) {
+      // Add stylesheet if it doesn't exist
+      if (!imageDescriptionsStylesheet) {
+        try {
+          const cssURL = chrome.runtime.getURL('image-descriptions.css');
+          console.log('Image Descriptions CSS URL:', cssURL);
+          
+          const linkElement = document.createElement('link');
+          linkElement.setAttribute('rel', 'stylesheet');
+          linkElement.setAttribute('data-accessibility-image-descriptions', 'true');
+          linkElement.setAttribute('href', cssURL);
+          document.head.appendChild(linkElement);
+        } catch (error) {
+          console.error('Error applying image descriptions stylesheet:', error);
+        }
+      }
+      
+      // Create tooltip container if it doesn't exist
+      if (!tooltipContainer) {
+        try {
+          // Create tooltip container
+          const container = document.createElement('div');
+          container.className = 'accessibility-image-description-tooltip';
+          
+          // Add to DOM
+          document.body.appendChild(container);
+        } catch (error) {
+          console.error('Error creating image description tooltip container:', error);
+        }
+      }
+      
+      // Setup image descriptions
+      setupImageDescriptions();
+      
+      // Add scroll event listener to update tooltip position
+      window.addEventListener('scroll', handlePageScroll, { passive: true });
+    } else {
+      // Remove the stylesheet when disabled
+      if (imageDescriptionsStylesheet) {
+        imageDescriptionsStylesheet.remove();
+      }
+      
+      // Remove the tooltip container
+      if (tooltipContainer) {
+        tooltipContainer.remove();
+      }
+      
+      // Remove image description event listeners
+      removeImageDescriptionListeners();
+      
+      // Remove scroll event listener
+      window.removeEventListener('scroll', handlePageScroll);
+      
+      // Reset tooltip tracking variables
+      activeTooltipElement = null;
+      lastTooltipEvent = null;
+    }
+    
+    // Only send update to background if this wasn't triggered by the background
+    if (!fromBackground) {
+      // Notify background script of state change
+      try {
+        chrome.runtime.sendMessage({
+          action: "updateState",
+          feature: "imageDescriptions",
+          enabled: enable
+        }).catch(() => {
+          // Ignore errors if background isn't ready
+        });
+      } catch (error) {
+        console.warn('Failed to notify background of image descriptions state change:', error);
+      }
+    }
+  }
+  // Helper function to set up image descriptions
+  function setupImageDescriptions(): void {
+    // Only target images and elements that contain images
+    const imageElements = document.querySelectorAll('img, input[type="image"]');
+    const containersWithImages = document.querySelectorAll('a:has(img), button:has(img), [role="button"]:has(img)');
+    
+    // Add event listeners to all standalone images
+    imageElements.forEach(element => {
+      element.addEventListener('mouseenter', handleImageMouseEnter as EventListener);
+      element.addEventListener('mouseleave', handleImageMouseLeave as EventListener);
+      element.addEventListener('mousemove', handleImageMouseMove as EventListener);
+    });
+    
+    // Add event listeners to containers with images
+    containersWithImages.forEach(element => {
+      element.addEventListener('mouseenter', handleImageMouseEnter as EventListener);
+      element.addEventListener('mouseleave', handleImageMouseLeave as EventListener);
+      element.addEventListener('mousemove', handleImageMouseMove as EventListener);
+    });
+    
+    // Set up observer for dynamically added images
+    setupImageObserver();
+  }
+  
+  // Function to observe dynamically added images
+  function setupImageObserver(): void {
+    // Remove any existing observer
+    if (window.__imageObserver) {
+      window.__imageObserver.disconnect();
+    }
+    
+    // Create a new mutation observer
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach(node => {            if (node.nodeType === Node.ELEMENT_NODE) {              // Handle added images
+              const addedElement = node as Element;
+              
+              // Check if it's an image
+              const isImage = addedElement.tagName === 'IMG' || 
+                            (addedElement.tagName === 'INPUT' && addedElement.getAttribute('type') === 'image');
+              
+              // Check if it's a container with an image
+              const isContainerWithImage = 
+                (addedElement.tagName === 'A' || 
+                 addedElement.tagName === 'BUTTON' || 
+                 addedElement.getAttribute('role') === 'button') && 
+                addedElement.querySelector('img') !== null;
+              
+              // Only add listeners if it's an image or contains an image
+              if (isImage || isContainerWithImage) {
+                addedElement.addEventListener('mouseenter', handleImageMouseEnter as EventListener);
+                addedElement.addEventListener('mouseleave', handleImageMouseLeave as EventListener);
+                addedElement.addEventListener('mousemove', handleImageMouseMove as EventListener);
+              }
+              
+            // Also check for any relevant elements inside the added node
+              // Only select images and containers that have images
+              const nestedImages = addedElement.querySelectorAll('img, input[type="image"]');
+              const nestedContainersWithImages = addedElement.querySelectorAll('a:has(img), button:has(img), [role="button"]:has(img)');
+              
+              // Add listeners to images
+              nestedImages.forEach(element => {
+                element.addEventListener('mouseenter', handleImageMouseEnter as EventListener);
+                element.addEventListener('mouseleave', handleImageMouseLeave as EventListener);
+                element.addEventListener('mousemove', handleImageMouseMove as EventListener);
+              });
+              
+              // Add listeners to containers with images
+              nestedContainersWithImages.forEach(element => {
+                element.addEventListener('mouseenter', handleImageMouseEnter as EventListener);
+                element.addEventListener('mouseleave', handleImageMouseLeave as EventListener);
+                element.addEventListener('mousemove', handleImageMouseMove as EventListener);
+              });
+            }
+          });
+        }
+      });
+    });
+    
+    // Start observing the document
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    
+    // Store observer reference
+    window.__imageObserver = observer;
+  }
+  
+  // Function to handle mouse entering an image
+  function handleImageMouseEnter(event: MouseEvent): void {
+    const target = event.target as Element;
+    
+    // Only proceed if this element is an image or contains an image
+    const isImage = target.tagName === 'IMG' || 
+                   (target.tagName === 'INPUT' && target.getAttribute('type') === 'image');
+    const hasImage = target.querySelector('img') !== null;
+    
+    if (!isImage && !hasImage) {
+      return; // Skip if not image-related
+    }
+    
+    const description = getImageDescription(target);
+    
+    if (description && description !== 'No image found in this element') {
+      const tooltip = document.querySelector('.accessibility-image-description-tooltip') as HTMLElement;
+      if (tooltip) {
+        tooltip.textContent = description;
+        tooltip.classList.add('visible');
+        positionTooltip(tooltip, event);
+        
+        // Store for scroll handling
+        activeTooltipElement = target;
+        lastTooltipEvent = event;
+      }
+    }
+  }
+  
+  // Function to handle mouse leaving an image
+  function handleImageMouseLeave(): void {
+    const tooltip = document.querySelector('.accessibility-image-description-tooltip') as HTMLElement;
+    if (tooltip) {
+      tooltip.classList.remove('visible');
+    }
+  }
+    // Function to handle mouse moving over an image
+  function handleImageMouseMove(event: MouseEvent): void {
+    const tooltip = document.querySelector('.accessibility-image-description-tooltip') as HTMLElement;
+    if (tooltip && tooltip.classList.contains('visible')) {
+      positionTooltip(tooltip, event);
+    }
+  }
+  
+  // Function to position the tooltip near the image
+  function positionTooltip(tooltip: HTMLElement, event: MouseEvent): void {
+    const offset = 15; // Offset from cursor
+    
+    // Use clientX/clientY with scroll offsets for better positioning
+    let left = event.clientX + window.scrollX + offset;
+    let top = event.clientY + window.scrollY + offset;
+    
+    // Get the dimensions of the tooltip and viewport
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Adjust position if tooltip would go off the right edge
+    if (left + tooltipRect.width > viewportWidth + window.scrollX) {
+      left = event.clientX + window.scrollX - tooltipRect.width - offset;
+    }
+    
+    // Adjust position if tooltip would go off the bottom edge
+    if (top + tooltipRect.height > viewportHeight + window.scrollY) {
+      top = event.clientY + window.scrollY - tooltipRect.height - offset;
+    }
+    
+    // Apply the position using fixed coordinates for consistent positioning during scrolling
+    tooltip.style.position = 'fixed';
+    tooltip.style.left = `${event.clientX + offset}px`;
+    tooltip.style.top = `${event.clientY + offset}px`;
+  }
+    // Function to get image description from alt, title, or aria-label attributes
+  function getImageDescription(element: Element): string {
+    // Handle direct image elements
+    if (element.tagName === 'IMG') {
+      const alt = element.getAttribute('alt');
+      const title = element.getAttribute('title');
+      const ariaLabel = element.getAttribute('aria-label');
+      
+      // Prefer alt text, then aria-label, then title
+      if (alt && alt.trim() !== '') {
+        return alt;
+      } else if (ariaLabel && ariaLabel.trim() !== '') {
+        return ariaLabel;
+      } else if (title && title.trim() !== '') {
+        return title;
+      }
+      
+      return 'No description available for this image';
+    }
+    
+    // Input type="image" elements
+    if (element.tagName === 'INPUT' && element.getAttribute('type') === 'image') {
+      const alt = element.getAttribute('alt');
+      const title = element.getAttribute('title');
+      const ariaLabel = element.getAttribute('aria-label');
+      
+      if (alt && alt.trim() !== '') {
+        return alt;
+      } else if (ariaLabel && ariaLabel.trim() !== '') {
+        return ariaLabel;
+      } else if (title && title.trim() !== '') {
+        return title;
+      }
+      
+      return 'No description available for this image button';
+    }
+    
+    // Handle buttons, links, and other interactive elements that contain images
+    const childImg = element.querySelector('img');
+    if (childImg) {
+      const imgAlt = childImg.getAttribute('alt');
+      const imgTitle = childImg.getAttribute('title');
+      const imgAriaLabel = childImg.getAttribute('aria-label');
+      
+      if (imgAlt && imgAlt.trim() !== '') {
+        return imgAlt;
+      } else if (imgAriaLabel && imgAriaLabel.trim() !== '') {
+        return imgAriaLabel;
+      } else if (imgTitle && imgTitle.trim() !== '') {
+        return imgTitle;
+      }
+      
+      // If no description found on the image, try the container
+      const containerAriaLabel = element.getAttribute('aria-label');
+      const containerTitle = element.getAttribute('title');
+      const containerText = element.textContent?.trim();
+      
+      if (containerAriaLabel && containerAriaLabel.trim() !== '') {
+        return containerAriaLabel;
+      } else if (containerTitle && containerTitle.trim() !== '') {
+        return containerTitle;
+      } else if (containerText && containerText !== '') {
+        return containerText;
+      }
+      
+      return 'No description available for this image';
+    }
+    
+    // We should not reach here with our improved filtering, but just in case
+    return 'No image found in this element';
+  }// Function to remove image description event listeners
+  function removeImageDescriptionListeners(): void {
+    // Use the same selectors as in setupImageDescriptions
+    const imageElements = document.querySelectorAll('img, input[type="image"]');
+    const containersWithImages = document.querySelectorAll('a:has(img), button:has(img), [role="button"]:has(img)');
+    
+    // Remove event listeners from standalone images
+    imageElements.forEach(element => {
+      element.removeEventListener('mouseenter', handleImageMouseEnter as EventListener);
+      element.removeEventListener('mouseleave', handleImageMouseLeave as EventListener);
+      element.removeEventListener('mousemove', handleImageMouseMove as EventListener);
+    });
+    
+    // Remove event listeners from containers with images
+    containersWithImages.forEach(element => {
+      element.removeEventListener('mouseenter', handleImageMouseEnter as EventListener);
+      element.removeEventListener('mouseleave', handleImageMouseLeave as EventListener);
+      element.removeEventListener('mousemove', handleImageMouseMove as EventListener);
+    });
+    
+    // Disconnect the observer
+    if (window.__imageObserver) {
+      window.__imageObserver.disconnect();
+      window.__imageObserver = null;
+    }
+  }
+  
+  // Function to handle page scroll events and reposition tooltips
+  function handlePageScroll(): void {
+    // If we have an active tooltip and mouse event data, reposition the tooltip
+    if (activeTooltipElement && lastTooltipEvent) {
+      const tooltip = document.querySelector('.accessibility-image-description-tooltip') as HTMLElement;
+      
+      if (tooltip && tooltip.classList.contains('visible')) {
+        // Create a new event object with updated scroll coordinates
+        const updatedEvent = new MouseEvent('mousemove', {
+          clientX: lastTooltipEvent.clientX,
+          clientY: lastTooltipEvent.clientY,
+          bubbles: true,
+          cancelable: true,
+          view: window
+        });
+        
+        // Update position with the new event coordinates
+        positionTooltip(tooltip, updatedEvent);
+      }
+    }
+  }
+  
+  // Debug message to indicate that the script has loaded
   console.debug("Accessibility extension content script loaded");
 })();

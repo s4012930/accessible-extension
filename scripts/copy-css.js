@@ -22,6 +22,10 @@ const cssFiles = [
   'custom-cursor.css',
   'auto-scroll.css',
   'hover-controls.css',
+  'focus-mode.css',
+  'highlight-links.css',
+  'reading-progress.css',
+  'image-descriptions.css',
 ];
 
 console.log('Ensuring all CSS files are properly copied to the dist directory...');

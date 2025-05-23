@@ -2,8 +2,7 @@
   "name": "accessible-extension",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
-  "scripts": {
+  "type": "module",  "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && npm run copy-css",
     "copy-css": "node scripts/copy-css.js",
@@ -12,6 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
+    "test:html": "vitest run && start test-results.html",
+    "test:report": "vitest run --reporter verbose",
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
@@ -39,6 +40,7 @@
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/ui": "^3.1.4",
     "autoprefixer": "^10.4.21",
     "clsx": "^2.1.1",
     "eslint": "^9.22.0",

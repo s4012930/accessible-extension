@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { CollapsibleSlider } from '@/components/ui/collapsible-slider';
-import { Contrast, Type, Keyboard, Video, BookA, Eye, MousePointer, Brain, Sun, Moon, TextSelect, RulerIcon, AlignJustify, MousePointerClick, MousePointer2, MousePointerSquareDashed, LayoutDashboard, Focus, MoveHorizontal, EyeOff, ChevronDown, ChevronUp, Link2, ImageIcon, ArrowDownUp } from 'lucide-react';
+import { Contrast, Type, Keyboard, Video, Eye, MousePointer, Brain, Sun, Moon, TextSelect, RulerIcon, AlignJustify, MousePointerClick, MousePointer2, MousePointerSquareDashed, Focus, EyeOff, ChevronDown, ChevronUp, Link2, ImageIcon, ArrowDownUp, BookOpenCheck } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { useTheme } from 'next-themes';
@@ -15,6 +15,7 @@ interface AccessibilityState {
   highContrast: boolean;
   dyslexiaFont: boolean;
   readingLine: boolean;
+  focusMode: boolean;
   colorBlind?: {
     enabled: boolean;
     deuteranopia: boolean;
@@ -38,6 +39,9 @@ interface AccessibilityState {
   customCursor?: boolean;
   autoScroll?: boolean;
   hoverControls?: boolean;
+  highlightLinks?: boolean;
+  readingProgress?: boolean;
+  imageDescriptions?: boolean;
 }
 
 // Define a new component for collapsible toggles
@@ -134,14 +138,12 @@ export default function Popup() {
   const [customCursor, setCustomCursor] = useState(false);
   const [autoScroll, setAutoScroll] = useState(false);
   const [hoverControls, setHoverControls] = useState(false);
+  
   // Cognitive features
-  const [simplifiedView, setSimplifiedView] = useState(false);
+  const [readingProgress, setReadingProgress] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [highlightLinks, setHighlightLinks] = useState(false);
   const [imageDescriptions, setImageDescriptions] = useState(false);
-  
-  // Misc features
-  const [aiAlt, setAiAlt] = useState(false);
   
   // Load saved state when popup opens
   useEffect(() => {
@@ -152,6 +154,7 @@ export default function Popup() {
         setVision(updatedState.highContrast);
         setDyslexia(updatedState.dyslexiaFont);
         setReadingLine(updatedState.readingLine || false);
+        setFocusMode(updatedState.focusMode || false);
         setColorBlind(updatedState.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
         setTextScaling(updatedState.textScaling || { enabled: false, value: 100 });
         setLineHeight(updatedState.lineHeight || { enabled: false, value: 1.5 });
@@ -161,6 +164,9 @@ export default function Popup() {
         setCustomCursor(updatedState.customCursor || false);
         setAutoScroll(updatedState.autoScroll || false);
         setHoverControls(updatedState.hoverControls || false);
+        setHighlightLinks(updatedState.highlightLinks || false);
+        setReadingProgress(updatedState.readingProgress || false);
+        setImageDescriptions(updatedState.imageDescriptions || false);
       }
       return true;
     };
@@ -169,10 +175,16 @@ export default function Popup() {
     
     // Get initial state
     chrome.runtime.sendMessage({ action: "getState" }, (response: AccessibilityState) => {
-      if (response) {
+      if (chrome.runtime.lastError) {
+        console.error("Popup: Error getting initial state:", chrome.runtime.lastError.message);
+        toast.error("Could not load settings", { id: "initError" });
+        return;
+      }
+        if (response) {
         setVision(response.highContrast);
         setDyslexia(response.dyslexiaFont);
         setReadingLine(response.readingLine || false);
+        setFocusMode(response.focusMode || false);
         setColorBlind(response.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
         setTextScaling(response.textScaling || { enabled: false, value: 100 });
         setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });        
@@ -180,8 +192,11 @@ export default function Popup() {
         setMotor(response.keyboardNav || false);
         setLargeTargets(response.largeTargets || {enabled: false, value: 1.5});
         setCustomCursor(response.customCursor || false);
-        setAutoScroll(response.autoScroll || false);
+        setAutoScroll(response.autoScroll || false);        
         setHoverControls(response.hoverControls || false);
+        setHighlightLinks(response.highlightLinks || false);
+        setReadingProgress(response.readingProgress || false);
+        setImageDescriptions(response.imageDescriptions || false);
       }
       
       // Query the active tab directly to get the most up-to-date keyboard navigation state
@@ -362,29 +377,40 @@ export default function Popup() {
       feature: "readingLine", 
       enabled: checked 
     }, (response) => {
-      if (response && response.status === "success") {
-        toast.success(`Reading Guide ${checked ? 'enabled' : 'disabled'}!`, {
+      if (chrome.runtime.lastError || !response || response.status !== "success") {
+        toast.error(`Failed to toggle Reading Guide. ${chrome.runtime.lastError?.message || 'Unknown error'}`, {
           id: FEATURE_TOAST_ID
         });
-        
+        // Revert UI on error by fetching the true current state
+        chrome.runtime.sendMessage({ action: "getState" }, (stateResponse: AccessibilityState | undefined) => {
+          if (stateResponse) {
+            setReadingLine(stateResponse.readingLine || false);
+          }
+        });
+        return;
+      }
+      
+      toast.success(`Reading Guide ${checked ? 'enabled' : 'disabled'}!`, {
+        id: FEATURE_TOAST_ID
+      });
+      
+      // If background sends back the full updated state, use it directly
+      if (response.state) {
+        setReadingLine(response.state.readingLine || false);
+      } else {
         // Get updated state to ensure UI stays in sync with actual state
         chrome.runtime.sendMessage({ action: "getState" }, (response: AccessibilityState) => {
           if (response) {
             setVision(response.highContrast);
             setDyslexia(response.dyslexiaFont);
             setReadingLine(response.readingLine || false);
+            setFocusMode(response.focusMode || false);
             setColorBlind(response.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
             setTextScaling(response.textScaling || { enabled: false, value: 100 });
             setLineHeight(response.lineHeight || { enabled: false, value: 1.5 });
             setReducedMotion(response.reducedMotion || false);
           }
         });
-      } else {
-        toast.error('Failed to toggle Reading Guide', {
-          id: FEATURE_TOAST_ID
-        });
-        // Revert UI state if operation failed
-        setReadingLine(!checked);
       }
     });
   };
@@ -513,16 +539,139 @@ export default function Popup() {
         // Revert UI state if operation failed
         setColorBlind(prev => ({ ...prev, [type]: !checked, enabled: prev.deuteranopia || prev.protanopia || prev.tritanopia }));
       }
+    });  };
+    // Handler for focus mode toggle  
+  const handleFocusMode = (checked: boolean) => {
+    // Update state optimistically for responsive UI
+    setFocusMode(checked);
+    console.log('Focus mode toggle requested:', checked);
+    
+    // Send message to background script
+    chrome.runtime.sendMessage({ 
+      action: "toggleFeature", 
+      feature: "focusMode", 
+      enabled: checked 
+    }, (response) => {
+      if (chrome.runtime.lastError || !response || response.status !== "success") {
+        toast.error(`Failed to toggle Focus Mode. ${chrome.runtime.lastError?.message || 'Unknown error'}`, {
+          id: FEATURE_TOAST_ID
+        });
+        // Revert UI on error by fetching the true current state
+        chrome.runtime.sendMessage({ action: "getState" }, (stateResponse: AccessibilityState | undefined) => {
+          if (stateResponse) {
+            console.log('Reverting focus mode state from background:', stateResponse.focusMode);
+            setFocusMode(stateResponse.focusMode || false);
+            setReadingLine(stateResponse.readingLine || false);
+          }
+        });
+      } else {
+        toast.success(`Focus Mode ${checked ? 'enabled' : 'disabled'}!`, {
+          id: FEATURE_TOAST_ID
+        });
+        
+        // If background sends back the full updated state, use it directly
+        if (response.state) {
+          console.log('Focus mode state updated from background:', response.state.focusMode);
+          setFocusMode(response.state.focusMode || false);
+          setReadingLine(response.state.readingLine || false);
+        }
+      }
     });
   };
   
-  // Simple handler for non-functional toggles - updated with toast ID
-  const handleToggle = (setter: React.Dispatch<React.SetStateAction<boolean>>, name: string) => (checked: boolean) => {
-    setter(checked);
-    toast.success(`${name} ${checked ? 'enabled' : 'disabled'}!`, {
-      id: FEATURE_TOAST_ID
+  // Handler for reading progress toggle
+  const handleReadingProgress = (checked: boolean) => {
+    // Update state optimistically for responsive UI
+    setReadingProgress(checked);
+    
+    // Send message to background script
+    chrome.runtime.sendMessage({ 
+      action: "toggleFeature", 
+      feature: "readingProgress", 
+      enabled: checked 
+    }, (response) => {
+      if (chrome.runtime.lastError || !response || response.status !== "success") {
+        toast.error(`Failed to toggle Reading Progress. ${chrome.runtime.lastError?.message || 'Unknown error'}`, {
+          id: FEATURE_TOAST_ID
+        });
+        // Revert UI on error by fetching the true current state
+        chrome.runtime.sendMessage({ action: "getState" }, (stateResponse: AccessibilityState | undefined) => {
+          if (stateResponse) {
+            setReadingProgress(stateResponse.readingProgress || false);
+          }
+        });
+      } else {
+        toast.success(`Reading Progress ${checked ? 'enabled' : 'disabled'}!`, {
+          id: FEATURE_TOAST_ID
+        });
+        
+        // If background sends back the full updated state, use it directly
+        if (response.state) {
+          setReadingProgress(response.state.readingProgress || false);
+        }
+      }
     });
   };
+  
+  // Handler for highlight links toggle
+  const handleHighlightLinks = (checked: boolean) => {
+    // Update state optimistically for responsive UI
+    setHighlightLinks(checked);
+    
+    // Send message to background script
+    chrome.runtime.sendMessage({ 
+      action: "toggleFeature", 
+      feature: "highlightLinks", 
+      enabled: checked 
+    }, (response) => {
+      if (chrome.runtime.lastError || !response || response.status !== "success") {
+        toast.error(`Failed to toggle Highlight Links. ${chrome.runtime.lastError?.message || 'Unknown error'}`, {
+          id: FEATURE_TOAST_ID
+        });
+        // Revert UI on error by fetching the true current state
+        chrome.runtime.sendMessage({ action: "getState" }, (stateResponse: AccessibilityState | undefined) => {
+          if (stateResponse) {
+            setHighlightLinks(stateResponse.highlightLinks || false);
+          }
+        });
+      } else {
+        toast.success(`Highlight Links ${checked ? 'enabled' : 'disabled'}!`, {
+          id: FEATURE_TOAST_ID
+        });
+        
+        // If background sends back the full updated state, use it directly
+        if (response.state) {
+          setHighlightLinks(response.state.highlightLinks || false);
+        }
+      }
+    });
+  };
+
+    // Handler for image descriptions toggle
+  const handleImageDescriptions = (checked: boolean) => {
+    // Update state optimistically for responsive UI
+    setImageDescriptions(checked);
+    
+    // Send message to background script
+    chrome.runtime.sendMessage({ 
+      action: "toggleFeature", 
+      feature: "imageDescriptions", 
+      enabled: checked 
+    }, (response) => {
+      if (chrome.runtime.lastError || !response || response.status !== "success") {
+        console.error("Error toggling image descriptions:", chrome.runtime.lastError?.message);
+        toast.error('Failed to toggle Image Descriptions', {
+          id: FEATURE_TOAST_ID
+        });
+        // Revert UI state
+        setImageDescriptions(!checked);
+        return;
+      }
+      
+      toast.success(`Image Descriptions ${checked ? 'enabled' : 'disabled'}!`, {
+        id: FEATURE_TOAST_ID
+      });
+    });  };
   
   // Handler to turn off all accessibility features at once
   const handleTurnOffAll = () => {
@@ -557,11 +706,10 @@ export default function Popup() {
           setCustomCursor(false);
           setAutoScroll(false);          
           setHoverControls(false);
-          setSimplifiedView(false);
+          setReadingProgress(false);
           setFocusMode(false);
           setHighlightLinks(false);
           setImageDescriptions(false);
-          setAiAlt(false);
           setColorBlind({ enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
           setReducedMotion(false);
           setCustomCursor(false);
@@ -1038,49 +1186,31 @@ export default function Popup() {
             <Brain size={16} /> Cognitive Support
           </CardTitle>
           
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <LayoutDashboard size={16} /> Simplified View
+          <div className="flex items-center justify-between">            <span className="flex items-center gap-2">
+              <BookOpenCheck size={16} /> Reading Progress
             </span>
-            <Switch checked={simplifiedView} onCheckedChange={handleToggle(setSimplifiedView, 'Simplified View')} />
+            <Switch checked={readingProgress} onCheckedChange={handleReadingProgress} />
           </div>
             <div className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <Focus size={16} /> Focus Mode
             </span>
-            <Switch checked={focusMode} onCheckedChange={handleToggle(setFocusMode, 'Focus Mode')} />
+            <Switch checked={focusMode} onCheckedChange={handleFocusMode} />
           </div>
           
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <Link2 size={16} /> Highlight Links
             </span>
-            <Switch checked={highlightLinks} onCheckedChange={handleToggle(setHighlightLinks, 'Highlight Links')} />
+            <Switch checked={highlightLinks} onCheckedChange={handleHighlightLinks} />
           </div>
           
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <ImageIcon size={16} /> Image Descriptions
             </span>
-            <Switch checked={imageDescriptions} onCheckedChange={handleToggle(setImageDescriptions, 'Image Descriptions')} />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Miscellaneous Card */}
-      <Card>
-        <CardContent className="pt-4 pb-3 space-y-3">
-          <CardTitle className="flex items-center gap-2 pb-1 text-sm font-medium border-b">
-            <MoveHorizontal size={16} /> Miscellaneous
-          </CardTitle>
-          
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <BookA size={16} /> AI Alt-text
-            </span>
-            <Switch checked={aiAlt} onCheckedChange={handleToggle(setAiAlt, 'AI Alt-text')} />
-          </div>
-        </CardContent>
+            <Switch checked={imageDescriptions} onCheckedChange={handleImageDescriptions} />
+          </div></CardContent>
       </Card>
 
       <button 
@@ -1090,9 +1220,6 @@ export default function Popup() {
         Turn All Off
       </button>
 
-      <p className="text-xs text-muted-foreground">
-        Yusuf Arpaci (s4012930)
-      </p>
       <Toaster />
       <Toaster 
         position="bottom-center" 
