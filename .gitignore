@@ -17,6 +17,7 @@ html.meta.json.gz
 favicon.ico
 favicon.svg
 bg.png
+.github/
 
 # Editor directories and files
 .vscode/*
