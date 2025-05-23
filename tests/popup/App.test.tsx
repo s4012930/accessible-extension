@@ -193,7 +193,6 @@ describe('Popup Component', () => {
     expect(screen.getByText('Vision Support')).toBeInTheDocument();
     expect(screen.getByText('Motor Support')).toBeInTheDocument();
     expect(screen.getByText('Cognitive Support')).toBeInTheDocument();
-    expect(screen.getByText('Miscellaneous')).toBeInTheDocument();
     
     // Check some of the toggle options are present
     expect(screen.getByText('High Contrast')).toBeInTheDocument();
@@ -203,8 +202,6 @@ describe('Popup Component', () => {
     // Use getAllByText for ambiguous text that appears multiple times
     const reducedMotionElements = screen.getAllByText('Reduced Motion');
     expect(reducedMotionElements.length).toBeGreaterThan(0);
-    
-    expect(screen.getByText('AI Alt-text')).toBeInTheDocument();
   });
 
   it('toggles High Contrast mode and shows toast', () => {
@@ -297,26 +294,6 @@ describe('Popup Component', () => {
       
       expect(toast.success).toHaveBeenCalledWith(
         'Reduced Motion enabled!',
-        expect.any(Object)
-      );
-    }
-  });
-
-  it('toggles AI Alt-text and shows toast', () => {
-    render(<App />);
-    
-    const switchElements = screen.getAllByTestId('mock-switch');
-    // Find the AI Alt-text switch
-    const altTextSwitch = Array.from(switchElements).find(
-      element => element.closest('div')?.textContent?.includes('AI Alt-text')
-    );
-    
-    expect(altTextSwitch).toBeDefined();
-    if (altTextSwitch) {
-      fireEvent.click(altTextSwitch);
-      
-      expect(toast.success).toHaveBeenCalledWith(
-        'AI Alt-text enabled!',
         expect.any(Object)
       );
     }

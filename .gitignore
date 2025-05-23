@@ -7,10 +7,16 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+node_modules/
+dist/
+test-results.html
+coverage/
+*.log
+assets/
+html.meta.json.gz
+favicon.ico
+favicon.svg
+bg.png
 
 # Editor directories and files
 .vscode/*

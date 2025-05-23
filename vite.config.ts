@@ -30,6 +30,10 @@ export default defineConfig({
         'custom-cursor': 'src/content/custom-cursor.css',
         'auto-scroll': 'src/content/auto-scroll.css',
         'hover-controls': 'src/content/hover-controls.css',
+        'focus-mode': 'src/content/focus-mode.css',
+        "highlight-links": "src/content/highlight-links.css",
+        "reading-progress": "src/content/reading-progress.css",
+        "image-descriptions": "src/content/image-descriptions.css",
       },
       output: {
         entryFileNames: '[name].js',

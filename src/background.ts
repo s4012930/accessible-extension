@@ -6,6 +6,7 @@ interface AccessibilityState {
   highContrast: boolean;
   dyslexiaFont: boolean;
   readingLine: boolean;
+  focusMode: boolean;
   colorBlind: {
     enabled: boolean;
     deuteranopia: boolean;
@@ -29,13 +30,20 @@ interface AccessibilityState {
   customCursor: boolean;
   autoScroll: boolean;
   hoverControls: boolean;
+  highlightLinks: boolean;
+  readingProgress: boolean;
+  imageDescriptions: boolean;
   // Add other accessibility features as needed
 }
+
+// Track the timestamp of the last turn off all action
+let turnOffAllTimestamp = 0;
 
 const state: AccessibilityState = {
   highContrast: false,
   dyslexiaFont: false,
   readingLine: false,
+  focusMode: false,
   colorBlind: {
     enabled: false,
     deuteranopia: false,
@@ -54,10 +62,14 @@ const state: AccessibilityState = {
   keyboardNav: false,
   largeTargets: {
     enabled: false,
-    value: 1.5    // Default scale factor (1.5x)
-  },  customCursor: false,
+    value: 1.5    // Default scale factor (1.5x)  
+  },  
+  customCursor: false,
   autoScroll: false,
-  hoverControls: false
+  hoverControls: false,
+  highlightLinks: false,
+  readingProgress: false,
+  imageDescriptions: false
 };
 
 // Debounced storage function to prevent excessive writes to Chrome storage
@@ -150,8 +162,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ status: "success", state });
     return true;
   }
-  
-  if (request.action === "turnOffAll") {
+    if (request.action === "turnOffAll") {
+    console.log("Turn All Off: Disabling all accessibility features");
+    
     // Reset all state values to false
     state.highContrast = false;
     state.dyslexiaFont = false;
@@ -166,16 +179,43 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     state.keyboardNav = false;
     state.largeTargets.enabled = false;
     state.customCursor = false;
-    state.autoScroll = false;
+    state.autoScroll = false;    
+    state.focusMode = false;
+    state.hoverControls = false;
+    state.highlightLinks = false;
+    state.readingProgress = false;
+    state.imageDescriptions = false;
     
-    // Save state to storage immediately
-    chrome.storage.sync.set({ accessibilityState: state });
+    // Set a timestamp for the turnOffAll action to prevent race conditions
+    turnOffAllTimestamp = Date.now();
+    
+    console.log("Turn All Off: Setting hover controls to false in state");
+    
+    // Save state to storage immediately (very important to ensure persistence)
+    chrome.storage.sync.set({ 
+      accessibilityState: state,
+      turnOffAllTimestamp: turnOffAllTimestamp
+    });
+    
+    // Log that we're starting to apply changes to all tabs
+    console.log("Turn All Off: Starting to apply changes to all tabs");
+    
+    // Handle hover controls first to ensure it gets priority
+    const hoverControlsPromise = applyHoverControlsToAllTabs(false)
+      .then(() => {
+        console.log("Turn All Off: Successfully disabled hover controls on all tabs");
+      })
+      .catch(error => {
+        console.error("Turn All Off: Error disabling hover controls:", error);
+      });
     
     // Use Promise.all to wait for all async operations to complete
     Promise.all([
+      hoverControlsPromise, // Already started above
       applyToAllTabs("highContrast", false),
       applyToAllTabs("dyslexiaFont", false),
       applyToAllTabs("readingLine", false),
+      applyToAllTabs("focusMode", false),
       applyColorBlindToAllTabs("deuteranopia", false),
       applyColorBlindToAllTabs("protanopia", false),
       applyColorBlindToAllTabs("tritanopia", false),
@@ -185,8 +225,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       applyKeyboardNavToAllTabs(false),
       applyLargeTargetsToAllTabs(false),
       applyCustomCursorToAllTabs(false),
-      applyAutoScrollToAllTabs(false)
+      applyAutoScrollToAllTabs(false),
+      applyHighlightLinksToAllTabs(false),
+      applyReadingProgressToAllTabs(false),
+      applyImageDescriptionsToAllTabs(false)
     ]).then(() => {
+      console.log("Turn All Off: All features disabled successfully");
       // Send response only after all operations complete
       sendResponse({ status: "success", state });
     }).catch((error) => {
@@ -221,6 +265,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       
       // Save state to storage for persistence
       chrome.storage.sync.set({ accessibilityState: state });
+      sendResponse({ status: "success", state });      return true;
+    }    if (feature === "focusMode") {
+      state.focusMode = enabled;
+      
+      // Apply to all tabs, not just the current one
+      applyToAllTabs("focusMode", enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state });
       sendResponse({ status: "success", state });
       return true;
     }
@@ -230,6 +283,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       
       // Apply to all tabs, not just the current one
       applyToAllTabs("readingLine", enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state });
+      sendResponse({ status: "success", state });
+      return true;
+    }
+    
+    if (feature === "readingProgress") {
+      state.readingProgress = enabled;
+      
+      // Apply to all tabs
+      applyReadingProgressToAllTabs(enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state });
+      sendResponse({ status: "success", state });
+      return true;
+    }
+    
+    if (feature === "imageDescriptions") {
+      state.imageDescriptions = enabled;
+      
+      // Apply to all tabs
+      applyImageDescriptionsToAllTabs(enabled);
       
       // Save state to storage for persistence
       chrome.storage.sync.set({ accessibilityState: state });
@@ -465,10 +542,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ status: "success", state });
       return true;
     }    if (feature === "hoverControls") {
-      state.hoverControls = enabled;
+      state.hoverControls = request.enabled;
       
       // Apply to all tabs
-      applyHoverControlsToAllTabs(enabled);
+      applyHoverControlsToAllTabs(request.enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state }, () => {
+        // Ensure popup gets updated state
+        chrome.runtime.sendMessage({ 
+          action: "stateUpdated", 
+          state: state 
+        }).catch(() => {
+          // Ignore errors if popup is not open
+        });
+      });
+      
+      sendResponse({ status: "success", state });
+      return true;
+    }
+    
+    if (request.feature === "highlightLinks") {
+      state.highlightLinks = request.enabled;
+      
+      // Apply to all tabs
+      applyToAllTabs("highlightLinks", request.enabled);
       
       // Save state to storage for persistence
       chrome.storage.sync.set({ accessibilityState: state }, () => {
@@ -517,6 +615,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.feature === "readingLine") {
       state.readingLine = request.enabled;
+      chrome.storage.sync.set({ accessibilityState: state });
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      return true;
+    }
+
+    if (request.feature === "focusMode") {
+      state.focusMode = request.enabled;
       chrome.storage.sync.set({ accessibilityState: state });
       // Broadcast state change to popup if it's open
       chrome.runtime.sendMessage({ 
@@ -634,6 +745,188 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.feature === "hoverControls") {
       state.hoverControls = request.enabled;
+      
+      // Apply to all tabs
+      applyHoverControlsToAllTabs(request.enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state }, () => {
+        // Ensure popup gets updated state
+        chrome.runtime.sendMessage({ 
+          action: "stateUpdated", 
+          state: state 
+        }).catch(() => {
+          // Ignore errors if popup is not open
+        });
+      });
+      
+      sendResponse({ status: "success", state });
+      return true;
+    }
+    
+    if (request.feature === "highlightLinks") {
+      state.highlightLinks = request.enabled;
+      
+      // Apply to all tabs
+      applyToAllTabs("highlightLinks", request.enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state }, () => {
+        // Ensure popup gets updated state
+        chrome.runtime.sendMessage({ 
+          action: "stateUpdated", 
+          state: state 
+        }).catch(() => {
+          // Ignore errors if popup is not open
+        });
+      });
+      
+      sendResponse({ status: "success", state });
+      return true;
+    }
+    // Add other features here in the future
+  }
+  
+  // Listen for state updates from content scripts 
+  if (request.action === "updateState") {
+    if (request.feature === "highContrast") {
+      state.highContrast = request.enabled;
+      chrome.storage.sync.set({ accessibilityState: state });
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      return true;
+    }
+    
+    if (request.feature === "dyslexiaFont") {
+      state.dyslexiaFont = request.enabled;
+      chrome.storage.sync.set({ accessibilityState: state });
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      return true;
+    }
+
+    if (request.feature === "readingLine") {
+      state.readingLine = request.enabled;
+      chrome.storage.sync.set({ accessibilityState: state });
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      return true;
+    }
+
+    if (request.feature === "focusMode") {
+      state.focusMode = request.enabled;
+      chrome.storage.sync.set({ accessibilityState: state });
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      return true;
+    }
+
+    if (request.feature === "colorBlind") {
+      const { type } = request as { type?: ColorBlindType };
+      if (type) {
+        state.colorBlind[type] = request.enabled;
+        // Update the main enabled flag
+        state.colorBlind.enabled = state.colorBlind.deuteranopia || 
+                                  state.colorBlind.protanopia || 
+                                  state.colorBlind.tritanopia;
+      } else {
+        state.colorBlind.enabled = request.enabled;
+      }
+      chrome.storage.sync.set({ accessibilityState: state });
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      return true;
+    }    if (request.feature === "reducedMotion") {
+      state.reducedMotion = request.enabled;
+      chrome.storage.sync.set({ accessibilityState: state });
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      return true;
+    }    if (request.feature === "keyboardNav") {
+      if (typeof request.enabled === 'boolean' && state.keyboardNav !== request.enabled) {
+        state.keyboardNav = request.enabled;
+        // Save state to storage
+        chrome.storage.sync.set({ accessibilityState: state }, () => {
+          if (chrome.runtime.lastError) {
+            console.error("Error saving keyboardNav state to chrome.storage.sync:", chrome.runtime.lastError);
+          } else {
+            console.log("keyboardNav state saved to chrome.storage.sync:", state.keyboardNav);
+            // Propagate this change to all tabs
+            applyKeyboardNavToAllTabs(state.keyboardNav);
+          }
+        });
+      }
+      // Broadcast state change to popup if it's open, regardless of whether it changed,
+      // as the request might have originated from a content script state sync.
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      // sendResponse is not needed here as this is a state update, not a direct request needing a response to the sender.
+      return true;    }
+      
+    if (request.feature === "customCursor") {
+      state.customCursor = request.enabled;
+      chrome.storage.sync.set({ accessibilityState: state });
+      
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      return true;
+    }
+      if (request.feature === "largeTargets") {
+      state.largeTargets.enabled = request.enabled;
+      if (request.value !== undefined) {
+        state.largeTargets.value = request.value;
+      }
+      chrome.storage.sync.set({ accessibilityState: state });
+      
+      // Broadcast state change to popup if it's open
+      chrome.runtime.sendMessage({ 
+        action: "stateUpdated", 
+        state: state 
+      }).catch(() => {
+        // Ignore errors if popup is not open to receive the message
+      });
+      return true;
+    }    if (request.feature === "autoScroll") {
+      state.autoScroll = request.enabled;
       chrome.storage.sync.set({ accessibilityState: state });
       
       // Broadcast state change to popup if it's open
@@ -644,8 +937,129 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Ignore errors if popup is not open to receive the message
       });
       
+      // If this was enabled, apply it to all tabs
+      if (request.enabled) {
+        applyAutoScrollToAllTabs(true);
+      }
+      
+      return true;
+    }    if (request.feature === "hoverControls") {
+      state.hoverControls = request.enabled;
+      
+      // Apply to all tabs
+      applyHoverControlsToAllTabs(request.enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state }, () => {
+        // Ensure popup gets updated state
+        chrome.runtime.sendMessage({ 
+          action: "stateUpdated", 
+          state: state 
+        }).catch(() => {
+          // Ignore errors if popup is not open
+        });
+      });
+      
+      sendResponse({ status: "success", state });
       return true;
     }
+    
+    if (request.feature === "highlightLinks") {
+      state.highlightLinks = request.enabled;
+      
+      // Apply to all tabs
+      applyToAllTabs("highlightLinks", request.enabled);
+      
+      // Save state to storage for persistence
+      chrome.storage.sync.set({ accessibilityState: state }, () => {
+        // Ensure popup gets updated state
+        chrome.runtime.sendMessage({ 
+          action: "stateUpdated", 
+          state: state 
+        }).catch(() => {
+          // Ignore errors if popup is not open
+        });
+      });
+      
+      sendResponse({ status: "success", state });
+      return true;
+    }
+    // Add other features here in the future
+  }
+  
+  // Listen for visibility changes
+  if (request.action === "updateVisibility") {
+    const { tabId, visible } = request;
+    
+    if (visible) {
+      // Tab is becoming visible, reapply settings
+      chrome.tabs.get(tabId, (tab) => {
+        if (chrome.runtime.lastError || !tab.url || !tab.url.startsWith('http')) {
+          return;
+        }
+        
+        // Reapply all relevant settings
+        if (state.highContrast) {
+          chrome.tabs.sendMessage(tabId, { action: "toggleHighContrast", enabled: true });
+        }
+        
+        if (state.dyslexiaFont) {
+          chrome.tabs.sendMessage(tabId, { action: "toggleDyslexiaFont", enabled: true });
+        }
+        
+        if (state.readingLine) {
+          chrome.tabs.sendMessage(tabId, { action: "toggleReadingLine", enabled: true });
+        }
+        
+        if (state.focusMode) {
+          chrome.tabs.sendMessage(tabId, { action: "toggleFocusMode", enabled: true });
+        }
+        
+        if (state.colorBlind.enabled) {
+          if (state.colorBlind.deuteranopia) {
+            chrome.tabs.sendMessage(tabId, { action: "toggleColorBlind", enabled: true, type: "deuteranopia" });
+          }
+          if (state.colorBlind.protanopia) {
+            chrome.tabs.sendMessage(tabId, { action: "toggleColorBlind", enabled: true, type: "protanopia" });
+          }
+          if (state.colorBlind.tritanopia) {
+            chrome.tabs.sendMessage(tabId, { action: "toggleColorBlind", enabled: true, type: "tritanopia" });
+          }
+        }
+        
+        if (state.reducedMotion) {
+          chrome.tabs.sendMessage(tabId, { action: "toggleReducedMotion", enabled: true });
+        }
+        
+        if (state.keyboardNav) {
+          chrome.tabs.sendMessage(tabId, { action: "toggleKeyboardNav", enabled: true });
+        }
+        
+        if (state.largeTargets.enabled) {
+          chrome.tabs.sendMessage(tabId, { action: "toggleLargeTargets", enabled: true, value: state.largeTargets.value });
+        }
+        
+        if (state.customCursor) {
+          chrome.tabs.sendMessage(tabId, { action: "toggleCustomCursor", enabled: true });
+        }
+        
+        if (state.autoScroll) {
+          chrome.tabs.sendMessage(tabId, { action: "toggleAutoScroll", enabled: true });
+        }
+        
+        if (state.hoverControls) {
+          chrome.tabs.sendMessage(tabId, { action: "toggleHoverControls", enabled: true });
+        }
+        
+        if (state.readingProgress) {
+          chrome.tabs.sendMessage(tabId, { action: "toggleReadingProgress", enabled: true });
+        }
+      });
+    } else {
+      // Tab is becoming hidden, you might want to save state or perform other actions
+    }
+    
+    return true;
   }
 
   // Handle value changes for sliders
@@ -726,6 +1140,16 @@ async function applyToAllTabs(feature: string, enable: boolean): Promise<void> {
               target: { tabId },
               files: ["/reading-line.css"]
             });
+          } else if (feature === "focusMode") {
+            await chrome.scripting.insertCSS({
+              target: { tabId },
+              files: ["/focus-mode.css"]
+            });
+          } else if (feature === "highlightLinks") {
+            await chrome.scripting.insertCSS({
+              target: { tabId },
+              files: ["/highlight-links.css"]
+            });
           }
         } catch (err) {
           console.error(`Failed to insert CSS into tab ${tabId}:`, err);
@@ -739,6 +1163,8 @@ async function applyToAllTabs(feature: string, enable: boolean): Promise<void> {
         chrome.tabs.sendMessage(tabId, {
           action: feature === "highContrast" ? "toggleHighContrast" : 
                   feature === "dyslexiaFont" ? "toggleDyslexiaFont" : 
+                  feature === "focusMode" ? "toggleFocusMode" :
+                  feature === "highlightLinks" ? "toggleHighlightLinks" :
                   "toggleReadingLine",
           enabled: enable
         }, (response) => {
@@ -753,6 +1179,8 @@ async function applyToAllTabs(feature: string, enable: boolean): Promise<void> {
                 chrome.tabs.sendMessage(tabId, {
                   action: feature === "highContrast" ? "toggleHighContrast" : 
                           feature === "dyslexiaFont" ? "toggleDyslexiaFont" : 
+                          feature === "focusMode" ? "toggleFocusMode" :
+                          feature === "highlightLinks" ? "toggleHighlightLinks" :
                           "toggleReadingLine",
                   enabled: enable
                 });
@@ -1295,11 +1723,16 @@ async function applyAutoScrollToAllTabs(enabled: boolean): Promise<void> {
   }
 }
 
-// Initialize by loading state from storage
-chrome.storage.sync.get("accessibilityState", (result) => {
+chrome.storage.sync.get(["accessibilityState", "turnOffAllTimestamp"], (result) => {
   if (result.accessibilityState) {
     Object.assign(state, result.accessibilityState);
     console.log("Loaded settings from storage:", state);
+  }
+  
+  // Restore the turnOffAllTimestamp if available
+  if (result.turnOffAllTimestamp) {
+    turnOffAllTimestamp = result.turnOffAllTimestamp;
+    console.log("Restored Turn All Off timestamp:", turnOffAllTimestamp);
   }
 });
 
@@ -1347,6 +1780,24 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         
       } catch (err) {
         console.error("Error inserting reading line CSS:", err);
+      }
+    }
+    
+    if (state.focusMode) {
+      try {
+        await chrome.scripting.insertCSS({
+          target: { tabId: activeInfo.tabId },
+          files: ["/focus-mode.css"]
+        });
+        
+        // Force reinitialize the focus mode in this tab
+        chrome.tabs.sendMessage(activeInfo.tabId, {
+          action: "toggleFocusMode",
+          enabled: true
+        }).catch(err => console.error("Error toggling focus mode:", err));
+        
+      } catch (err) {
+        console.error("Error inserting focus mode CSS:", err);
       }
     }
 
@@ -1432,6 +1883,42 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         console.error("Error applying auto-scroll:", err);
       }
     }
+
+    if (state.highlightLinks) {
+      try {
+        // Inject the highlight links CSS
+        await chrome.scripting.insertCSS({
+          target: { tabId: activeInfo.tabId },
+          files: ["/highlight-links.css"]
+        });
+        
+        // Apply the highlight links feature
+        chrome.tabs.sendMessage(activeInfo.tabId, {
+          action: "toggleHighlightLinks",
+          enabled: true
+        }).catch(err => console.error("Error applying highlight links:", err));
+      } catch (err) {
+        console.error("Error applying highlight links:", err);
+      }
+    }
+    
+    if (state.imageDescriptions) {
+      try {
+        // Inject the image descriptions CSS
+        await chrome.scripting.insertCSS({
+          target: { tabId: activeInfo.tabId },
+          files: ["/image-descriptions.css"]
+        });
+          // Apply the image descriptions feature
+        chrome.tabs.sendMessage(activeInfo.tabId, {
+          action: "toggleImageDescriptions",
+          enabled: true,
+          fromBackground: true
+        }).catch(err => console.error("Error applying image descriptions:", err));
+      } catch (err) {
+        console.error("Error applying image descriptions:", err);
+      }
+    }
   } catch (err) {
     console.error("Error getting tab info:", err);
   }
@@ -1472,6 +1959,20 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             enabled: true
           }).catch(err => console.error("Error applying reading line:", err));
         }).catch(err => console.error("Error inserting reading line CSS:", err));
+      }
+      
+      // Apply focus mode if enabled
+      if (state.focusMode) {
+        chrome.scripting.insertCSS({
+          target: { tabId },
+          files: ["/focus-mode.css"]
+        }).then(() => {
+          // Then apply the focus mode
+          chrome.tabs.sendMessage(tabId, {
+            action: "toggleFocusMode",
+            enabled: true
+          }).catch(err => console.error("Error applying focus mode:", err));
+        }).catch(err => console.error("Error inserting focus mode CSS:", err));
       }
       
       // Apply text scaling if enabled
@@ -1582,10 +2083,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         chrome.tabs.sendMessage(tabId, {
           action: "toggleAutoScroll",
           enabled: true
-        }).catch(err => console.log("Non-critical: Error applying auto-scroll on page load:", err));
-      }
-        // Apply hover controls if enabled
-      if (state.hoverControls) {
+        }).catch(err => console.log("Non-critical: Error applying auto-scroll on page load:", err));      }
+      
+      // Handle hover controls with special care for "Turn All Off" action
+      const now = Date.now();
+      const recentTurnOff = (now - turnOffAllTimestamp) < 5000;
+
+      if (state.hoverControls && !recentTurnOff) {
+        // Only apply hover controls if it's enabled AND there was no recent "Turn All Off"
+        console.log("Applying hover controls to tab", tabId);
         // First ensure CSS is loaded
         chrome.scripting.insertCSS({
           target: { tabId },
@@ -1593,7 +2099,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         }).then(() => {
           chrome.tabs.sendMessage(tabId, {
             action: "toggleHoverControls",
-            enabled: true
+            enabled: true,
+            fromBackground: true
           }, (response) => {
             if (chrome.runtime.lastError) {
               console.log("Retrying hover controls after error:", chrome.runtime.lastError.message);
@@ -1601,7 +2108,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
               setTimeout(() => {
                 chrome.tabs.sendMessage(tabId, {
                   action: "toggleHoverControls",
-                  enabled: true
+                  enabled: true,
+                  fromBackground: true
                 }).catch(err => console.log("Still failed to apply hover controls:", err));
               }, 500);
             } else if (response && response.status === "success") {
@@ -1609,6 +2117,73 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             }
           });
         }).catch(err => console.log("Non-critical: Error inserting hover controls CSS:", err));
+      } else if (recentTurnOff) {
+        console.log(`Skipping hover controls application in tab ${tabId} - "Turn All Off" was recently used`);
+        
+        // Explicitly ensure hover controls are off in this tab
+        chrome.tabs.sendMessage(tabId, {
+          action: "toggleHoverControls",
+          enabled: false,
+          fromBackground: true
+        }).catch(err => console.log("Error ensuring hover controls remain off:", err));      
+      }
+        // Apply reading progress if enabled
+      if (state.readingProgress) {
+        // First ensure CSS is loaded
+        chrome.scripting.insertCSS({
+          target: { tabId },
+          files: ["/reading-progress.css"]
+        }).then(() => {
+          // Then apply the reading progress
+          chrome.tabs.sendMessage(tabId, {
+            action: "toggleReadingProgress",
+            enabled: true
+          }).catch(err => console.error("Error applying reading progress:", err));
+        }).catch(err => console.error("Error inserting reading progress CSS:", err));
+      }
+      
+      // Apply highlight links if enabled
+      if (state.highlightLinks) {
+        // First ensure CSS is loaded
+        chrome.scripting.insertCSS({
+          target: { tabId },
+          files: ["/highlight-links.css"]
+        }).then(() => {
+          chrome.tabs.sendMessage(tabId, {
+            action: "toggleHighlightLinks",
+            enabled: true
+          }).catch(err => console.log("Non-critical: Error applying highlight links on page load:", err));
+        }).catch(err => console.log("Non-critical: Error inserting highlight links CSS:", err));
+      }
+      
+      // Apply image descriptions if enabled
+      if (state.imageDescriptions) {
+        // First ensure CSS is loaded
+        chrome.scripting.insertCSS({
+          target: { tabId },
+          files: ["/image-descriptions.css"]
+        }).then(() => {          // Then apply the image descriptions
+          chrome.tabs.sendMessage(tabId, {
+            action: "toggleImageDescriptions",
+            enabled: true,
+            fromBackground: true
+          }).catch(err => console.log("Non-critical: Error applying image descriptions on page load:", err));
+        }).catch(err => console.log("Non-critical: Error inserting image descriptions CSS:", err));
+      }
+      
+      // Apply image descriptions if enabled
+      if (state.imageDescriptions) {
+        // First ensure CSS is loaded
+        chrome.scripting.insertCSS({
+          target: { tabId },
+          files: ["/image-descriptions.css"]
+        }).then(() => {          // Then apply the image descriptions
+          chrome.tabs.sendMessage(tabId, {
+            action: "toggleImageDescriptions",
+            enabled: true,
+            fromBackground: true
+          }).catch(err => console.error("Error applying image descriptions:", err));
+        }).catch(err => console.error("Error inserting image descriptions CSS:", err));
       }
     }).catch(err => {
       console.log(`Error injecting content script into tab ${tabId} (this is normal for some pages):`, err);
@@ -1618,62 +2193,183 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 // Apply hover controls to all tabs
 function applyHoverControlsToAllTabs(enabled: boolean, originTabId?: number): Promise<void> {
+  console.log(`applyHoverControlsToAllTabs called with enabled=${enabled}`);
   return new Promise<void>((resolve) => {
     // Keep track of tabs we've processed
     const processedTabs = new Set<number>();
     
     chrome.tabs.query({}, async (tabs) => {
-      for (const tab of tabs) {
-        const tabId = tab.id;
-        if (!tabId) continue;
-        
-        // Skip the originating tab and already processed tabs
-        if (originTabId !== undefined && tabId === originTabId) {
-          console.log(`Skipping originating tab ${tabId} to prevent message loop`);
-          continue;
-        }
-        
-        if (processedTabs.has(tabId)) {
-          console.log(`Tab ${tabId} already processed, skipping`);
-          continue;
-        }
-        
-        // Mark this tab as processed
-        processedTabs.add(tabId);
-        
-        try {
-          await chrome.scripting.executeScript({
-            target: { tabId },
-            files: ['content-script.js']
-          });
-          console.log(`Content script injected into tab ${tabId} for hover controls`);
-          
-          // Wait for script to initialize
-          await new Promise(resolve => setTimeout(resolve, 300));
-          
-          // Send the actual toggle message
-          chrome.tabs.sendMessage(
-            tabId, 
-            { 
-              action: "toggleHoverControls", 
-              enabled,
-              // Add this flag to indicate it's from the background script
-              fromBackground: true 
-            },
-            (response) => {
-              if (chrome.runtime.lastError) {
-                console.log(`Hover controls message error in tab ${tabId}: ${chrome.runtime.lastError.message}`);
-              } else if (response && response.status === "success") {
-                console.log(`Successfully applied hover controls to tab ${tabId}`);
-              }
-            }
-          );
-        } catch (err) {
-          console.error(`Error applying hover controls to tab ${tabId}:`, err);
-        }
-      }
+      console.log(`Found ${tabs.length} tabs to apply hover controls to`);
       
-      resolve();
+      // Use Promise.allSettled to handle all tabs in parallel
+      const promises = tabs
+        .filter(tab => tab.id !== undefined)
+        .map(async (tab) => {
+          const tabId = tab.id as number;
+          
+          // Skip the originating tab and already processed tabs
+          if (originTabId !== undefined && tabId === originTabId) {
+            console.log(`Skipping originating tab ${tabId} to prevent message loop`);
+            return;
+          }
+          
+          if (processedTabs.has(tabId)) {
+            console.log(`Tab ${tabId} already processed, skipping`);
+            return;
+          }
+          
+          // Mark this tab as processed
+          processedTabs.add(tabId);
+          
+          try {
+            // First, ensure content script is loaded
+            await chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['content-script.js']
+            });
+            
+            // Now apply the hover control setting
+            chrome.tabs.sendMessage(tabId, {
+              action: "toggleHoverControls",
+              enabled,
+              fromBackground: true
+            }).catch(err => console.log(`Error applying hover controls to tab ${tabId}:`, err));
+          } catch (error) {
+            console.error(`Error in tab ${tabId}:`, error);
+          }
+        });
+      
+      // Wait for all promises to settle
+      Promise.allSettled(promises).then(() => {
+        console.log("Completed applying hover controls to all tabs");
+        resolve();
+      });
     });
   });
+}
+
+// Function to apply highlight links to all tabs
+async function applyHighlightLinksToAllTabs(enabled: boolean): Promise<void> {
+  try {
+    // Get all tabs
+    const tabs = await chrome.tabs.query({});
+    
+    // For each tab
+    for (const tab of tabs) {
+      if (!tab.id || !tab.url || !tab.url.startsWith('http')) continue;
+      
+      const tabId = tab.id;
+      
+      // Send message to content script with error handling
+      try {
+        await chrome.tabs.sendMessage(tabId, { 
+          action: "toggleHighlightLinks", 
+          enabled: enabled 
+        });
+        console.log(`Highlight links ${enabled ? 'enabled' : 'disabled'} for tab ${tabId}`);
+      } catch (err) {
+        console.log(`Could not apply highlight links to tab ${tabId}:`, err);
+      }
+    }
+  } catch (error) {
+    console.error("Error applying highlight links to all tabs:", error);
+  }
+}
+
+// Function to apply reading progress to all tabs
+async function applyReadingProgressToAllTabs(enabled: boolean): Promise<void> {
+  try {
+    // Get all tabs
+    const tabs = await chrome.tabs.query({});
+    
+    // Loop through each tab and apply the setting
+    for (const tab of tabs) {
+      // Skip tabs without IDs or URLs (like chrome:// URLs which we can't inject into)
+      if (!tab.id || !tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://')) {
+        continue;
+      }
+      
+      try {
+        // Send message to content script to apply the reading progress
+        await chrome.tabs.sendMessage(tab.id, {
+          action: 'toggleReadingProgress',
+          enabled: enabled
+        });
+        
+        console.log(`Applied reading progress (${enabled ? 'ON' : 'OFF'}) to tab ${tab.id}`);
+      } catch (err) {
+        // This often means the content script is not yet injected
+        console.log(`Couldn't apply reading progress to tab ${tab.id}, injecting content script...`);
+        
+        try {
+          // Try to inject the content script
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['content-script.js']
+          });
+          
+          // Now try again to apply the setting
+          await chrome.tabs.sendMessage(tab.id, {
+            action: 'toggleReadingProgress',
+            enabled: enabled
+          });
+          
+          console.log(`Injected script and applied reading progress to tab ${tab.id}`);
+        } catch (injectErr) {
+          // Some tabs can't be injected into (like chrome:// URLs)
+          console.error(`Failed to inject content script into tab ${tab.id}:`, injectErr);
+        }
+      }
+    }  } catch (error) {
+    console.error("Error applying reading progress to all tabs:", error);
+  }
+}
+
+// Function to apply image descriptions to all tabs
+async function applyImageDescriptionsToAllTabs(enabled: boolean): Promise<void> {
+  try {
+    // Get all tabs
+    const tabs = await chrome.tabs.query({});
+    
+    // Loop through each tab and apply the setting
+    for (const tab of tabs) {
+      // Skip tabs without IDs or URLs (like chrome:// URLs which we can't inject into)
+      if (!tab.id || !tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://')) {
+        continue;
+      }
+      
+      try {        // Send message to content script to apply the image descriptions
+        await chrome.tabs.sendMessage(tab.id, {
+          action: 'toggleImageDescriptions',
+          enabled: enabled,
+          fromBackground: true
+        });
+        
+        console.log(`Applied image descriptions (${enabled ? 'ON' : 'OFF'}) to tab ${tab.id}`);
+      } catch (err) {
+        // This often means the content script is not yet injected
+        console.log(`Couldn't apply image descriptions to tab ${tab.id}, injecting content script...`);
+        
+        try {
+          // Try to inject the content script
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['content-script.js']
+          });
+            // Now try again to apply the setting
+          await chrome.tabs.sendMessage(tab.id, {
+            action: 'toggleImageDescriptions',
+            enabled: enabled,
+            fromBackground: true
+          });
+          
+          console.log(`Injected script and applied image descriptions to tab ${tab.id}`);
+        } catch (injectionError) {
+          // Some tabs can't be injected into (like chrome:// URLs)
+          console.error(`Failed to inject content script into tab ${tab.id}:`, injectionError);        }
+      }
+    }
+  } catch (error) {
+    console.error("Error applying reading progress to all tabs:", error);
+  }
 }
