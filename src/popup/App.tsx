@@ -148,11 +148,11 @@ export default function Popup() {
   // Load saved state when popup opens
   useEffect(() => {
     // Set up message listener to catch state updates from background script
-    const messageListener = (request: any) => {
+    const messageListener = (request: { action: string; state?: Partial<AccessibilityState> }) => {
       if (request.action === "stateUpdated" && request.state) {
         const updatedState = request.state;
-        setVision(updatedState.highContrast);
-        setDyslexia(updatedState.dyslexiaFont);
+        setVision(updatedState.highContrast || false);
+        setDyslexia(updatedState.dyslexiaFont || false);
         setReadingLine(updatedState.readingLine || false);
         setFocusMode(updatedState.focusMode || false);
         setColorBlind(updatedState.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });
@@ -181,8 +181,8 @@ export default function Popup() {
         return;
       }
         if (response) {
-        setVision(response.highContrast);
-        setDyslexia(response.dyslexiaFont);
+        setVision(response.highContrast || false);
+        setDyslexia(response.dyslexiaFont || false);
         setReadingLine(response.readingLine || false);
         setFocusMode(response.focusMode || false);
         setColorBlind(response.colorBlind || { enabled: false, deuteranopia: false, protanopia: false, tritanopia: false });

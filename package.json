@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build && npm run copy-css",
     "copy-css": "node scripts/copy-css.js",
-    "lint": "eslint .",
+    "lint": "eslint . --format=stylish && echo \"ESLint: All files passed linting checks!\"",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

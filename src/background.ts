@@ -1,18 +1,21 @@
 // Define the valid colour blind types
 type ColorBlindType = 'deuteranopia' | 'protanopia' | 'tritanopia';
 
+// Define the state for colourblind accessibility feature
+interface ColorBlindState {
+  enabled: boolean;
+  deuteranopia: boolean;
+  protanopia: boolean;
+  tritanopia: boolean;
+}
+
 // Global state for accessibility features
 interface AccessibilityState {
   highContrast: boolean;
   dyslexiaFont: boolean;
   readingLine: boolean;
   focusMode: boolean;
-  colorBlind: {
-    enabled: boolean;
-    deuteranopia: boolean;
-    protanopia: boolean;
-    tritanopia: boolean;
-  };
+  colorBlind: ColorBlindState;
   textScaling: {
     enabled: boolean;
     value: number;  // 100 = default (middle), can be decreased or increased
@@ -75,11 +78,11 @@ const state: AccessibilityState = {
 // Debounced storage function to prevent excessive writes to Chrome storage
 const storageWriteDebouncer = (() => {
   let timeout: number | null = null;
-  let pendingWrites: any = {};
+  let pendingWrites: Partial<AccessibilityState> = {};
   let isWriting = false;
   
   return {
-    update: (updates: any) => {
+    update: (updates: Partial<AccessibilityState>) => {
       pendingWrites = { ...pendingWrites, ...updates };
       
       if (timeout) {
@@ -315,7 +318,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
     
     if (feature === "colorBlind") {
-      const { type, fullState } = request as { type?: ColorBlindType, fullState?: any };
+      const { type, fullState } = request as { type?: ColorBlindType, fullState?: ColorBlindState };
       
       // If the request includes a complete state object, use that directly
       if (fullState) {
@@ -2297,7 +2300,7 @@ async function applyReadingProgressToAllTabs(enabled: boolean): Promise<void> {
         });
         
         console.log(`Applied reading progress (${enabled ? 'ON' : 'OFF'}) to tab ${tab.id}`);
-      } catch (err) {
+      } catch {
         // This often means the content script is not yet injected
         console.log(`Couldn't apply reading progress to tab ${tab.id}, injecting content script...`);
         
@@ -2346,7 +2349,7 @@ async function applyImageDescriptionsToAllTabs(enabled: boolean): Promise<void> 
         });
         
         console.log(`Applied image descriptions (${enabled ? 'ON' : 'OFF'}) to tab ${tab.id}`);
-      } catch (err) {
+      } catch {
         // This often means the content script is not yet injected
         console.log(`Couldn't apply image descriptions to tab ${tab.id}, injecting content script...`);
         

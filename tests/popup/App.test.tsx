@@ -71,7 +71,7 @@ const localStorageMock = (() => {
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
 // Mock Chrome API
-let mockSendMessage = vi.fn().mockImplementation((message, callback) => {
+const mockSendMessage = vi.fn().mockImplementation((message, callback) => {
   if (callback && typeof callback === 'function') {
     callback({ status: "success" });
   }
@@ -101,7 +101,7 @@ const mockTabsQuery = vi.fn().mockImplementation((queryInfo, callback) => {
 // Create these mock functions before defining the chrome global object
 
 // Create typed mock functions
-let mockStorageGet = vi.fn().mockImplementation((key, callback) => {
+const mockStorageGet = vi.fn().mockImplementation((key, callback) => {
   callback({
     accessibilityState: {
       highContrast: false,
@@ -147,7 +147,7 @@ global.chrome = {
       set: mockStorageSet
     }
   }
-} as any;
+} as unknown as typeof chrome;
 
 // Mock window.matchMedia
 window.matchMedia = vi.fn().mockImplementation(query => ({
@@ -208,7 +208,6 @@ describe('Popup Component', () => {
     render(<App />);
     
     // Find the High Contrast label and its associated switch
-    const highContrastLabel = screen.getByText('High Contrast');
     const switchElements = screen.getAllByTestId('mock-switch');
     const highContrastSwitch = switchElements[0]; // Assuming this is the first switch
     
@@ -261,7 +260,6 @@ describe('Popup Component', () => {
     render(<App />);
     
     // Find the Keyboard-Only Nav switch
-    const keyboardLabel = screen.getByText('Keyboard-Only Nav');
     const switchElements = screen.getAllByTestId('mock-switch');
     // Find the switch close to the Keyboard-Only Nav text
     const keyboardSwitch = Array.from(switchElements).find(
@@ -579,7 +577,7 @@ describe('Popup Component', () => {
         feature: 'lineHeight',
         enabled: true,
         value: 2.0 // New slider value
-      }, (response: any) => {
+      }, (response: { status: string }) => {
         expect(response.status).toBe('success');
       });
       
@@ -641,7 +639,7 @@ describe('Popup Component', () => {
         feature: 'textScaling',
         enabled: true,
         value: 150 // New slider value
-      }, (response: any) => {
+      }, (response: { status: string }) => {
         expect(response.status).toBe('success');
       });
       

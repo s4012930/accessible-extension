@@ -3,7 +3,47 @@ declare global {
   interface Window {
     __accessibilityExtensionLoaded?: boolean;
     __imageObserver?: MutationObserver | null;
+    _origRAF?: typeof window.requestAnimationFrame;
   }
+  interface Element {
+    _origAnimate?: typeof Element.prototype.animate;
+  }
+}
+
+// Define interface for accessibility state
+interface AccessibilityState {
+  highContrast?: boolean;
+  dyslexiaFont?: boolean;
+  readingLine?: boolean;
+  colorBlind?: {
+    enabled?: boolean;
+    type?: string;
+    deuteranopia?: boolean;
+    protanopia?: boolean;
+    tritanopia?: boolean;
+  };
+  textScaling?: {
+    enabled?: boolean;
+    value?: number;
+  };
+  lineHeight?: {
+    enabled?: boolean;
+    value?: number;
+  };
+  reducedMotion?: boolean;
+  keyboardNav?: boolean;
+  largeTargets?: {
+    enabled?: boolean;
+    value?: number;
+  };
+  customCursor?: boolean;
+  autoScroll?: boolean;
+  hoverControls?: boolean;
+  highlightLinks?: boolean;
+  readingProgress?: boolean;
+  imageDescriptions?: boolean;
+  focusMode?: boolean;
+  [key: string]: unknown;  // For future features
 }
 
 // Wrap everything in an immediately invoked function expression (IIFE) 
@@ -18,77 +58,134 @@ declare global {
   window.__accessibilityExtensionLoaded = true;
 
   // Type definitions
-  type ColorBlindType = 'protanopia' | 'deuteranopia' | 'tritanopia' | 'high-contrast' | null;
+  type ColorBlindType = 'protanopia' | 'deuteranopia' | 'tritanopia' | 'high-contrast' | undefined;
+
+  // Helper function to check for valid ColorBlindType
+  function isColorBlindType(type: string | undefined): type is ColorBlindType {
+    const validTypes: Array<string | undefined> = ['protanopia', 'deuteranopia', 'tritanopia', 'high-contrast', undefined];
+    return validTypes.includes(type);
+  }
+
+  interface ExtensionMessage {
+    action: string;
+    enabled?: boolean;
+    type?: ColorBlindType | string;
+    value?: number;
+    fromBackground?: boolean;
+    feature?: string;
+    message?: string;
+    error?: string;
+  }
   
   // Listen for messages from the extension popup/background
-  chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((request: ExtensionMessage, _sender: chrome.runtime.MessageSender, sendResponse: (response?: Record<string, unknown>) => void) => {
     if (request.action === "ping") {
       sendResponse({ status: "pong" });
       return true;
     }
     if (request.action === "toggleHighContrast") {
-      toggleHighContrast(request.enabled);
-      sendResponse({ status: "success" });
+      if (typeof request.enabled === 'boolean') {
+        toggleHighContrast(request.enabled);
+        sendResponse({ status: "success" });
+      } else {
+        sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleHighContrast." });
+      }
       return true;
     }
     
     if (request.action === "toggleDyslexiaFont") {
-      toggleDyslexiaFont(request.enabled);
-      sendResponse({ status: "success" });
+      if (typeof request.enabled === 'boolean') {
+        toggleDyslexiaFont(request.enabled);
+        sendResponse({ status: "success" });
+      } else {
+        sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleDyslexiaFont." });
+      }
       return true;
     }
     
     if (request.action === "toggleReadingLine") {
-      toggleReadingLine(request.enabled);
-      sendResponse({ status: "success" });
+      if (typeof request.enabled === 'boolean') {
+        toggleReadingLine(request.enabled);
+        sendResponse({ status: "success" });
+      } else {
+        sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleReadingLine." });
+      }
       return true;
     }
     
     if (request.action === "toggleColorBlind") {
-      toggleColorBlind(request.enabled, request.type);
-      sendResponse({ status: "success" });
+      if (typeof request.enabled === 'boolean') {
+        if (isColorBlindType(request.type)) {
+          toggleColorBlind(request.enabled, request.type);
+          sendResponse({ status: "success" });
+        } else {
+          sendResponse({ status: "error", message: "Invalid 'type' parameter for toggleColorBlind." });
+        }
+      } else {
+        sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleColorBlind." });
+      }
       return true;
     }
     
     if (request.action === "updateTextScaling") {
-      toggleTextScaling(request.enabled, request.value);
-      sendResponse({ status: "success" });
+      if (typeof request.enabled === 'boolean' && typeof request.value === 'number') {
+        toggleTextScaling(request.enabled, request.value);
+        sendResponse({ status: "success" });
+      } else {
+        sendResponse({ status: "error", message: "Invalid or missing 'enabled' or 'value' parameter for updateTextScaling." });
+      }
       return true;
     }
     
     if (request.action === "updateLineHeight") {
-      toggleLineHeight(request.enabled, request.value);
-      sendResponse({ status: "success" });
+      if (typeof request.enabled === 'boolean' && typeof request.value === 'number') {
+        toggleLineHeight(request.enabled, request.value);
+        sendResponse({ status: "success" });
+      } else {
+        sendResponse({ status: "error", message: "Invalid or missing 'enabled' or 'value' parameter for updateLineHeight." });
+      }
       return true;
     }
     
     if (request.action === "toggleReducedMotion") {
-      toggleReducedMotion(request.enabled);
-      sendResponse({ status: "success" });
+      if (typeof request.enabled === 'boolean') {
+        toggleReducedMotion(request.enabled);
+        sendResponse({ status: "success" });
+      } else {
+        sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleReducedMotion." });
+      }
       return true;
     }    if (request.action === "toggleLargeTargets") {
       try {
-        console.log('Large targets request received:', request.enabled);
-        toggleLargeTargets(request.enabled);
-        sendResponse({ 
-          status: "success", 
-          enabled: request.enabled,
-          value: 1.5  // Return the default value
-        });
-      } catch (error: any) {
+        if (typeof request.enabled === 'boolean') {
+          console.log('Large targets request received:', request.enabled);
+          toggleLargeTargets(request.enabled);
+          sendResponse({ 
+            status: "success", 
+            enabled: request.enabled,
+            value: 1.5  // Return the default value
+          });
+        } else {
+          sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleLargeTargets." });
+        }
+      } catch (error: unknown) {
         console.error("Error in toggleLargeTargets handler:", error);
-        sendResponse({ status: "error", message: error.toString() });
+        sendResponse({ status: "error", message: error instanceof Error ? error.message : String(error) });
       }
       return true;
     }
     
     if (request.action === "toggleKeyboardNav") {
       try {
-        toggleKeyboardNav(request.enabled);
-        sendResponse({ status: "success" });
-      } catch (error: any) {
+        if (typeof request.enabled === 'boolean') {
+          toggleKeyboardNav(request.enabled);
+          sendResponse({ status: "success" });
+        } else {
+          sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleKeyboardNav." });
+        }
+      } catch (error: unknown) {
         console.error("Error in toggleKeyboardNav handler:", error);
-        sendResponse({ status: "error", message: error.toString() });
+        sendResponse({ status: "error", message: error instanceof Error ? error.message : String(error) });
       }
       return true;
     }
@@ -98,149 +195,167 @@ declare global {
         const keyboardNavDOM = !!document.querySelector('link[data-accessibility-keyboard-nav]');
         const keyboardNavStorage = localStorage.getItem('accessibility-keyboard-nav') === 'true';
         const keyboardNavEnabled = keyboardNavDOM || keyboardNavStorage;
-        sendResponse({ enabled: keyboardNavEnabled });
-      } catch (error: any) {
+        sendResponse({ enabled: keyboardNavEnabled });      } catch (error: unknown) {
         console.error("Error in getKeyboardNavState handler:", error);
-        sendResponse({ enabled: false, error: error.toString() });      }
+        sendResponse({ enabled: false, error: error instanceof Error ? error.message : String(error) });      }
       return true;
     }    if (request.action === "toggleFocusMode") {
       try {
-        console.log('Focus mode request received:', request.enabled);
-        // Check current class state before toggle
-        const currentClassState = document.documentElement.classList.contains('accessibility-focus-mode');
-        console.log('Current focus mode class state before toggle:', currentClassState);
-        console.log('Current focus mode localStorage state before toggle:', localStorage.getItem('accessibility-focus-mode'));
-        
-        toggleFocusMode(request.enabled);
-        
-        // Double-check that the class state changed correctly
-        const newClassState = document.documentElement.classList.contains('accessibility-focus-mode');
-        console.log('Focus mode class state after toggle:', newClassState);
-        console.log('Focus mode localStorage state after toggle:', localStorage.getItem('accessibility-focus-mode'));
-        
-        // Alert the background page with the current state
-        chrome.runtime.sendMessage({
-          action: "updateState",
-          feature: "focusMode",
-          enabled: newClassState
-        }).catch(err => console.log("Error updating focus mode state in background after toggle:", err));
-        
-        sendResponse({ 
-          status: "success",
-          enabled: newClassState // Send back the actual current state
-        });
-      } catch (error: any) {
+        if (typeof request.enabled === 'boolean') {
+          console.log('Focus mode request received:', request.enabled);
+          // Check current class state before toggle
+          const currentClassState = document.documentElement.classList.contains('accessibility-focus-mode');
+          console.log('Current focus mode class state before toggle:', currentClassState);
+          console.log('Current focus mode localStorage state before toggle:', localStorage.getItem('accessibility-focus-mode'));
+          
+          toggleFocusMode(request.enabled);
+          
+          // Double-check that the class state changed correctly
+          const newClassState = document.documentElement.classList.contains('accessibility-focus-mode');
+          console.log('Focus mode class state after toggle:', newClassState);
+          console.log('Focus mode localStorage state after toggle:', localStorage.getItem('accessibility-focus-mode'));
+          
+          // Alert the background page with the current state
+          chrome.runtime.sendMessage({
+            action: "updateState",
+            feature: "focusMode",
+            enabled: newClassState
+          }).catch(err => console.log("Error updating focus mode state in background after toggle:", err));
+          
+          sendResponse({ 
+            status: "success",
+            enabled: newClassState
+          });
+        } else {
+          sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleFocusMode." });
+        }
+      } catch (error: unknown) {
         console.error("Error in toggleFocusMode handler:", error);
-        sendResponse({ status: "error", message: error.toString() });
+        sendResponse({ status: "error", message: error instanceof Error ? error.message : String(error) });
       }
       return true;
     }
     
     if (request.action === "toggleCustomCursor") {
       try {
-        console.log('Custom cursor request received:', request.enabled);
-        toggleCustomCursor(request.enabled);
-        sendResponse({ 
-          status: "success", 
-          enabled: request.enabled
-        });
-      } catch (error: any) {
+        if (typeof request.enabled === 'boolean') {
+          console.log('Custom cursor request received:', request.enabled);
+          toggleCustomCursor(request.enabled);
+          sendResponse({ 
+            status: "success", 
+            enabled: request.enabled
+          });
+        } else {
+          sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleCustomCursor." });
+        }
+      } catch (error: unknown) {
         console.error("Error in toggleCustomCursor handler:", error);
-        sendResponse({ status: "error", message: error.toString() });
+        sendResponse({ status: "error", message: error instanceof Error ? error.message : String(error) });
       }      return true;
     }    if (request.action === "toggleAutoScroll") {
       try {
-        // Just toggle the feature directly
-        toggleAutoScroll(request.enabled);
-        
-        // Send response immediately after toggle
-        sendResponse({ 
-          status: "success", 
-          enabled: request.enabled 
-        });
-      } catch (error) {
+        if (typeof request.enabled === 'boolean') {
+          toggleAutoScroll(request.enabled);
+          sendResponse({ 
+            status: "success", 
+            enabled: request.enabled 
+          });
+        } else {
+          sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleAutoScroll." });
+        }
+      } catch (error: unknown) {
         console.error("Error in toggleAutoScroll handler:", error);
         sendResponse({ status: "error", message: error instanceof Error ? error.message : String(error) });
       }
       return true;
     }
-      if (request.action === "toggleHoverControls") {      try {
-        console.log(`Hover controls request received: enabled=${request.enabled}, fromBackground=${request.fromBackground || false}`);
-        
-        // Get current local storage state
-        const currentLocalState = localStorage.getItem('accessibility-hover-controls');
-        
-        // Check if the request is to enable hover controls and if they were recently turned off
-        if (request.enabled && !request.fromBackground && currentLocalState === 'turnedOff') {
-          console.log('Hover controls were recently turned off via "Turn All Off". User must explicitly re-enable.');
+
+    if (request.action === "toggleHoverControls") {
+      try {
+        if (typeof request.enabled === 'boolean') {
+          console.log(`Hover controls request received: enabled=${request.enabled}, fromBackground=${request.fromBackground || false}`);
+          const currentLocalState = localStorage.getItem('accessibility-hover-controls');
+          if (request.enabled && !request.fromBackground && currentLocalState === 'turnedOff') {
+            console.log('Hover controls were recently turned off via "Turn All Off". User must explicitly re-enable.');
+            sendResponse({ 
+              status: "success", 
+              feature: "hoverControls",
+              enabled: false
+            });
+            return true;
+          }
+          toggleHoverControls(request.enabled, request.fromBackground || false);
           sendResponse({ 
             status: "success", 
             feature: "hoverControls",
-            enabled: false
+            enabled: request.enabled 
           });
-          return true;
+        } else {
+          sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleHoverControls." });
         }
-        
-        toggleHoverControls(request.enabled, request.fromBackground || false);
-        
-        // Always send a successful response regardless of internal implementation details
-        sendResponse({ 
-          status: "success", 
-          feature: "hoverControls",
-          enabled: request.enabled 
-        });
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error in toggleHoverControls handler:", error);
-        sendResponse({ status: "error", message: error.toString() });
+        sendResponse({ status: "error", message: error instanceof Error ? error.message : String(error) });
         return true;
       }
     }
     
     if (request.action === "toggleHighlightLinks") {
       try {
-        console.log('Highlight links request received:', request.enabled);
-        toggleHighlightLinks(request.enabled);
-        sendResponse({ 
-          status: "success", 
-          enabled: request.enabled 
-        });
-      } catch (error: any) {
+        if (typeof request.enabled === 'boolean') {
+          console.log('Highlight links request received:', request.enabled);
+          toggleHighlightLinks(request.enabled);
+          sendResponse({ 
+            status: "success", 
+            enabled: request.enabled 
+          });
+        } else {
+          sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleHighlightLinks." });
+        }
+      } catch (error: unknown) {
         console.error("Error in toggleHighlightLinks handler:", error);
-        sendResponse({ status: "error", message: error.toString() });
+        sendResponse({ status: "error", message: error instanceof Error ? error.message : String(error) });
       }
       return true;
     }
     
     if (request.action === "toggleReadingProgress") {
       try {
-        console.log('Reading progress request received:', request.enabled);
-        toggleReadingProgress(request.enabled);
-        sendResponse({ 
-          status: "success", 
-          enabled: request.enabled 
-        });
-      } catch (error: any) {
+        if (typeof request.enabled === 'boolean') {
+          console.log('Reading progress request received:', request.enabled);
+          toggleReadingProgress(request.enabled);
+          sendResponse({ 
+            status: "success", 
+            enabled: request.enabled 
+          });
+        } else {
+          sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleReadingProgress." });
+        }
+      } catch (error: unknown) {
         console.error("Error in toggleReadingProgress handler:", error);
-        sendResponse({ status: "error", message: error.toString() });
+        sendResponse({ status: "error", message: error instanceof Error ? error.message : String(error) });
       }
       return true;
     }
     
     if (request.action === "toggleImageDescriptions") {
       try {
-        const enabled = request.enabled;
-        const fromBackground = request.fromBackground || false;
-        toggleImageDescriptions(enabled, fromBackground);
-        sendResponse({
-          status: "success",
-          message: `Image descriptions ${enabled ? 'enabled' : 'disabled'}`
-        });
-      } catch (err) {
+        if (typeof request.enabled === 'boolean') {
+          const fromBackground = request.fromBackground || false;
+          toggleImageDescriptions(request.enabled, fromBackground);
+          sendResponse({
+            status: "success",
+            message: `Image descriptions ${request.enabled ? 'enabled' : 'disabled'}`
+          });
+        } else {
+          sendResponse({ status: "error", message: "Invalid or missing 'enabled' parameter for toggleImageDescriptions." });
+        }
+      } catch (err: unknown) { // MODIFIED
         console.error('Error toggling image descriptions:', err);
         sendResponse({
           status: "error",
-          message: `Failed to toggle image descriptions: ${err}`
+          message: `Failed to toggle image descriptions: ${err instanceof Error ? err.message : String(err)}`
         });
       }
       return true;
@@ -249,13 +364,12 @@ declare global {
     // Add other accessibility toggles here in the future
     return false;
   });
-
   // Global state object to minimize storage operations
-  let globalAccessibilityState: Record<string, any> = {};
+  let globalAccessibilityState: AccessibilityState = {};
 
   // Debounce function to limit storage updates
   let storageUpdateTimer: ReturnType<typeof setTimeout> | null = null;
-  const debouncedStorageUpdate = (updates: Record<string, any>) => {
+  const debouncedStorageUpdate = (updates: Partial<AccessibilityState>) => {
     if (storageUpdateTimer) {
       clearTimeout(storageUpdateTimer);
     }
@@ -459,38 +573,49 @@ declare global {
     // Apply script-level animations control
     if (enabled) {
       // 1. Handle Element.animate() calls
-      if (Element.prototype.animate) {
-        // Use type assertion to add custom property
-        (Element.prototype as any)._origAnimate = Element.prototype.animate;
-        Element.prototype.animate = function(keyframes, options) {
-          // Call original with zero duration and cancel
-          const optionsCopy = options ? { ...(options as object), duration: 0 } : { duration: 0 };
-          const anim = (this as any)._origAnimate(keyframes, optionsCopy);
-          anim?.cancel?.();
-          return anim;
+      if (Element.prototype.animate && !Element.prototype._origAnimate) {
+        Element.prototype._origAnimate = Element.prototype.animate;
+        Element.prototype.animate = function(this: Element, keyframes, options) {
+          let processedOptions: KeyframeAnimationOptions | undefined;
+          if (typeof options === 'number') {
+            processedOptions = { duration: options };
+          } else if (options) {
+            processedOptions = { ...options };
+          }
+
+          if (processedOptions) {
+            processedOptions.duration = 0;
+          } else {
+            processedOptions = { duration: 0 };
+          }
+          
+          // Ensure _origAnimate exists before calling, and use .call for correct 'this'
+          const anim = this._origAnimate?.call(this, keyframes, processedOptions);
+          // Setting duration to 0 should make it finish instantly.
+          return anim as Animation; // Standard animate returns Animation
         };
       }
 
       // 2. Optional: Handle requestAnimationFrame for certain animations
-      if (!(window as any)._origRAF) {
-        (window as any)._origRAF = window.requestAnimationFrame;
-        window.requestAnimationFrame = () => (window as any)._origRAF(() => {}, 0);
+      if (window.requestAnimationFrame && !window._origRAF) {
+        window._origRAF = window.requestAnimationFrame;
+        window.requestAnimationFrame = (() => 0) as typeof window.requestAnimationFrame;
       }
     } else {
       // Restore original animations behavior if disabled
-      if ((Element.prototype as any)._origAnimate) {
-        Element.prototype.animate = (Element.prototype as any)._origAnimate;
-        delete (Element.prototype as any)._origAnimate;
+      if (Element.prototype._origAnimate) {
+        Element.prototype.animate = Element.prototype._origAnimate;
+        delete Element.prototype._origAnimate;
       }
       
-      if ((window as any)._origRAF) {
-        window.requestAnimationFrame = (window as any)._origRAF;
-        delete (window as any)._origRAF;
+      if (window._origRAF) {
+        window.requestAnimationFrame = window._origRAF;
+        delete window._origRAF;
       }
     }
 
     // Add or remove stylesheet for CSS-based animations control
-    let reducedMotionStylesheet = document.querySelector('link[data-accessibility-reduced-motion]');
+    const reducedMotionStylesheet = document.querySelector('link[data-accessibility-reduced-motion]');
     
     if (enabled) {
       if (!reducedMotionStylesheet) {
@@ -656,9 +781,7 @@ declare global {
           body > main, 
           body > div > main,
           .prose,
-          .prose *,
-          h1, h2, h3, h4, h5, h6,
-          p {
+          .prose * {
             font-size: ${value / 100}em !important;
           }
         `;
@@ -855,27 +978,18 @@ declare global {
   function toggleLargeTargets(enabled: boolean): void {
     console.log(`Toggling large targets: ${enabled ? 'ON' : 'OFF'}`);
     
-    // Track if state is changing to avoid redundant operations
-    const currentState = document.documentElement.classList.contains('accessibility-large-targets');
-    if (currentState === enabled) {
-      // No change needed, but ensure storage is consistent
-      localStorage.setItem('accessibility-large-targets', String(enabled));
-      return;
-    }
-    
-    // First handle the class on HTML element
+    // Always update localStorage
+    localStorage.setItem('accessibility-large-targets', String(enabled));
+
+    // Always remove/add class as needed
     if (enabled) {
       document.documentElement.classList.add('accessibility-large-targets');
     } else {
       document.documentElement.classList.remove('accessibility-large-targets');
     }
-    
-    // Store setting in localStorage
-    localStorage.setItem('accessibility-large-targets', String(enabled));
-    
-    // Add or remove stylesheet for CSS-based large targets
-    let largeTargetsStylesheet = document.querySelector('link[data-accessibility-large-targets]');
-    
+
+    // Always add/remove stylesheet as needed
+    const largeTargetsStylesheet = document.querySelector('link[data-accessibility-large-targets]');
     if (enabled) {
       if (!largeTargetsStylesheet) {
         try {
@@ -990,7 +1104,7 @@ declare global {
       localStorage.setItem('accessibility-custom-cursor', String(enable));
       
       // Add or remove stylesheet for CSS-based custom cursor
-      let customCursorStylesheet = document.querySelector('link[data-accessibility-custom-cursor]');
+      const customCursorStylesheet = document.querySelector('link[data-accessibility-custom-cursor]');
       
       if (enable) {
         if (!customCursorStylesheet) {
@@ -1041,7 +1155,8 @@ declare global {
             } catch (err) {
               console.error("Error in second removal attempt:", err);
             }
-          });        } else {
+          });
+        } else {
           console.log("All custom cursor stylesheets removed successfully");
         }
       }, 100);
@@ -1102,7 +1217,7 @@ declare global {
       localStorage.setItem('accessibility-auto-scroll', String(enable));
       
       // Add or remove stylesheet for auto-scroll
-      let autoScrollStylesheet = document.querySelector('link[data-accessibility-auto-scroll]');
+      const autoScrollStylesheet = document.querySelector('link[data-accessibility-auto-scroll]');
       
       if (enable) {
         if (!autoScrollStylesheet) {
@@ -2194,7 +2309,7 @@ declare global {
     
     // Animation duration (3000ms = 3 seconds)
     const HOVER_DURATION = 3000;
-    let startTime = Date.now();
+    const startTime = Date.now();
     
     console.log('Starting hover timer animation');
     
@@ -2375,7 +2490,7 @@ declare global {
     localStorage.setItem('accessibility-highlight-links', String(enable));
     
     // Add or remove stylesheet
-    let highlightLinksStylesheet = document.querySelector('link[data-accessibility-highlight-links]');
+    const highlightLinksStylesheet = document.querySelector('link[data-accessibility-highlight-links]');
     
     if (enable) {
       if (!highlightLinksStylesheet) {
@@ -2444,8 +2559,8 @@ declare global {
     localStorage.setItem('accessibility-reading-progress', String(enable));
     
     // Add or remove stylesheet and progress indicator
-    let readingProgressStylesheet = document.querySelector('link[data-accessibility-reading-progress]');
-    let progressContainer = document.querySelector('.accessibility-reading-progress-container');
+    const readingProgressStylesheet = document.querySelector('link[data-accessibility-reading-progress]');
+    const progressContainer = document.querySelector('.accessibility-reading-progress-container');
     
     if (enable) {
       // Add stylesheet if it doesn't exist
@@ -2583,8 +2698,8 @@ declare global {
     localStorage.setItem('accessibility-image-descriptions', fromBackground && !enable ? 'turnedOff' : String(enable));
     
     // Add or remove stylesheet and image description tooltips
-    let imageDescriptionsStylesheet = document.querySelector('link[data-accessibility-image-descriptions]');
-    let tooltipContainer = document.querySelector('.accessibility-image-description-tooltip');
+    const imageDescriptionsStylesheet = document.querySelector('link[data-accessibility-image-descriptions]');
+    const tooltipContainer = document.querySelector('.accessibility-image-description-tooltip');
     
     if (enable) {
       // Add stylesheet if it doesn't exist

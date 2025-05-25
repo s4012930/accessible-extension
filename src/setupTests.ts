@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
 // Mock browser extension API
-(window as any).chrome = {
+(window as { chrome: typeof chrome }).chrome = {
   storage: {
     sync: {
       get: vi.fn(),

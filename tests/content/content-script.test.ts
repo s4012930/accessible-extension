@@ -2,12 +2,82 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { JSDOM } from 'jsdom';
 
+// Define window extensions for accessibility features
+declare global {
+  interface Window {
+    hoverControlsActive?: boolean;
+    keyboardNavActive?: boolean;
+    keyboardClickDelay?: number;
+    mockKeyboardTimer?: NodeJS.Timeout | null;
+    __accessibilityExtensionLoaded?: boolean;
+    __imageObserver?: MutationObserver | null;
+  }
+}
+
+// Define Chrome API types to replace 'any'
+interface ChromeRuntime {
+  sendMessage: ReturnType<typeof vi.fn>;
+  onMessage: {
+    addListener: ReturnType<typeof vi.fn>;
+    removeListener: ReturnType<typeof vi.fn>;
+  };
+  getURL: ReturnType<typeof vi.fn>;
+}
+
+interface ChromeStorage {
+  sync: {
+    get: ReturnType<typeof vi.fn>;
+    set: ReturnType<typeof vi.fn>;
+  };
+}
+
+interface ChromeAPI {
+  runtime: ChromeRuntime;
+  storage: ChromeStorage;
+}
+
+interface LocalStorageMock {
+  getItem: ReturnType<typeof vi.fn>;
+  setItem: ReturnType<typeof vi.fn>;
+  removeItem: ReturnType<typeof vi.fn>;
+}
+
+// Message types for communication
+interface BaseMessage {
+  action: string;
+  enabled?: boolean;
+  type?: string;
+  delay?: number;
+  size?: string;
+  selector?: string;
+  id?: string;
+  color?: string;
+  fontSize?: string;
+  lineHeight?: string;
+  maxWidth?: string;
+  fontWeight?: string;
+  value?: number | string;
+}
+
+interface ResponseMessage {
+  status: string;
+}
+
+type MessageListener = (
+  message: BaseMessage,
+  sender: MessageSender,
+  sendResponse: (response: ResponseMessage) => void
+) => boolean | void;
+
+// Using Record type instead of empty interface to satisfy ESLint no-empty-object-type
+type MessageSender = chrome.runtime.MessageSender & Record<string, unknown>;
+
 // Create a fresh DOM for each test
 let dom: JSDOM;
 let document: Document;
 let window: Window & typeof globalThis;
-let chrome: any;
-let localStorage: any;
+let chrome: ChromeAPI;
+let localStorage: LocalStorageMock;
 
 // Setup the test environment
 beforeEach(() => {
@@ -20,11 +90,11 @@ beforeEach(() => {
   });
 
   document = dom.window.document;
-  window = dom.window as any;
-
+  window = dom.window as unknown as Window & typeof globalThis;
+  
   // Mock localStorage
   localStorage = {
-    getItem: vi.fn((key) => null),
+    getItem: vi.fn(() => null),
     setItem: vi.fn(),
     removeItem: vi.fn(),
   };
@@ -36,16 +106,16 @@ beforeEach(() => {
       sendMessage: vi.fn(),
       onMessage: {
         addListener: vi.fn(),
-        removeListener: vi.fn(),
+        removeListener: vi.fn()
       },
-      getURL: vi.fn((url) => `chrome-extension://mock-extension-id/${url}`),
+      getURL: vi.fn((url: string) => `chrome-extension://mock-extension-id/${url}`)
     },
     storage: {
       sync: {
-        get: vi.fn((key, cb) => cb({})),
-        set: vi.fn(),
-      },
-    },
+        get: vi.fn((_: string | string[] | Record<string, unknown>, cb: (items: Record<string, unknown>) => void) => cb({})),
+        set: vi.fn()
+      }
+    }
   };
 
   Object.defineProperty(window, 'chrome', { value: chrome });
@@ -53,7 +123,7 @@ beforeEach(() => {
   // Make JSDOM's window and document available globally
   global.window = window;
   global.document = document;
-  global.chrome = chrome;
+  (global as Record<string, unknown>).chrome = chrome;
 });
 
 afterEach(() => {
@@ -61,11 +131,11 @@ afterEach(() => {
 });
 
 // Helper function to simulate the content script message handler
-function createMessageHandler() {
+function createMessageHandler(): MessageListener {
   return (
-    message: any,
-    sender: any,
-    sendResponse: (response: any) => void
+    message: BaseMessage,
+    sender: MessageSender,
+    sendResponse: (response: ResponseMessage) => void
   ) => {
     if (message.action === 'toggleHighContrast') {
       if (message.enabled) {
@@ -205,7 +275,7 @@ function createMessageHandler() {
         document.head.appendChild(hoverStyle);
         
         // Set up tracking state
-        (window as any).hoverControlsActive = true;
+        window.hoverControlsActive = true;
       } else {
         document.documentElement.classList.remove('accessibility-hover-controls');
         
@@ -220,7 +290,7 @@ function createMessageHandler() {
         indicators.forEach(indicator => indicator.remove());
         
         // Update tracking state
-        (window as any).hoverControlsActive = false;
+        window.hoverControlsActive = false;
       }
       
       localStorage.setItem('accessibility-hover-controls', String(message.enabled));
@@ -231,14 +301,14 @@ function createMessageHandler() {
     if (message.action === 'toggleKeyboardNav') {
       if (message.enabled) {
         document.documentElement.classList.add('accessibility-keyboard-nav');
-        (window as any).keyboardNavActive = true;
-        (window as any).keyboardClickDelay = message.delay || 1500; // Default delay
+        window.keyboardNavActive = true;
+        window.keyboardClickDelay = message.delay || 1500; // Default delay
       } else {
         document.documentElement.classList.remove('accessibility-keyboard-nav');
-        (window as any).keyboardNavActive = false;
+        window.keyboardNavActive = false;
         
         // Clear any pending timers (simulated)
-        (window as any).mockKeyboardTimer = null;
+        window.mockKeyboardTimer = null;
       }
       
       localStorage.setItem('accessibility-keyboard-nav', String(message.enabled));
@@ -260,7 +330,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleHighContrast', enabled: true },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -275,7 +345,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleHighContrast', enabled: false },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -294,7 +364,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleDyslexiaFont', enabled: true },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -309,7 +379,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleDyslexiaFont', enabled: false },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -328,7 +398,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleReadingLine', enabled: true },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -344,7 +414,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleReadingLine', enabled: false },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -364,7 +434,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleColorBlind', enabled: true, type: 'deuteranopia' },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -384,7 +454,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleColorBlind', enabled: false, type: 'deuteranopia' },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -407,7 +477,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleColorBlind', enabled: true, type: 'protanopia' },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -427,7 +497,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleColorBlind', enabled: false, type: 'protanopia' },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -450,7 +520,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleColorBlind', enabled: true, type: 'tritanopia' },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -470,7 +540,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleColorBlind', enabled: false, type: 'tritanopia' },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -493,7 +563,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleReducedMotion', enabled: true },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -513,7 +583,7 @@ describe('Content Script Functionality', () => {
     messageHandler(
       { action: 'toggleReducedMotion', enabled: false },
       {},
-      (response: any) => {
+      (response: ResponseMessage) => {
         expect(response.status).toBe('success');
       }
     );
@@ -574,7 +644,7 @@ it('toggles large targets mode on', () => {
   messageHandler(
     { action: 'toggleLargeTargets', enabled: true },
     {},
-    (response: any) => {
+    (response: ResponseMessage) => {
       expect(response.status).toBe('success');
     }
   );
@@ -605,7 +675,7 @@ it('toggles large targets mode off', () => {
   messageHandler(
     { action: 'toggleLargeTargets', enabled: false },
     {},
-    (response: any) => {
+    (response: ResponseMessage) => {
       expect(response.status).toBe('success');
     }
   );
@@ -638,7 +708,7 @@ it('handles redundant large targets state changes', () => {
   messageHandler(
     { action: 'toggleLargeTargets', enabled: true },
     {},
-    (response: any) => {
+    (response: ResponseMessage) => {
       expect(response.status).toBe('success');
     }
   );
@@ -659,9 +729,9 @@ it('updates the line-height stylesheet and data attribute', () => {
 
   // Add to createMessageHandler for line height functionality
   const updatedMessageHandler = function(
-    message: any, 
-    sender: any, 
-    sendResponse: (response: any) => void
+    message: BaseMessage, 
+    sender: MessageSender, 
+    sendResponse: (response: ResponseMessage) => void
   ) {
     if (message.action === 'updateLineHeight') {
       if (message.enabled) {
@@ -700,7 +770,7 @@ it('updates the line-height stylesheet and data attribute', () => {
   updatedMessageHandler(
     { action: 'updateLineHeight', enabled: true, value: 2 },
     {},
-    (response: any) => {
+    (response: ResponseMessage) => {
       expect(response.status).toBe('success');
     }
   );
@@ -720,7 +790,7 @@ it('updates the line-height stylesheet and data attribute', () => {
   updatedMessageHandler(
     { action: 'updateLineHeight', enabled: false },
     {},
-    (response: any) => {
+    (response: ResponseMessage) => {
       expect(response.status).toBe('success');
     }
   );
@@ -739,7 +809,7 @@ it('updates the line-height stylesheet and data attribute', () => {
 it('toggles hover controls', () => {
   // Update createMessageHandler to handle hover controls first
   const originalHandler = createMessageHandler();
-  const messageHandler = function(message: any, sender: any, sendResponse: (response: any) => void) {
+  const messageHandler = function(message: BaseMessage, sender: MessageSender, sendResponse: (response: ResponseMessage) => void) {
     if (message.action === 'toggleHoverControls') {
       if (message.enabled) {
         document.documentElement.classList.add('accessibility-hover-controls');
@@ -752,7 +822,7 @@ it('toggles hover controls', () => {
         document.head.appendChild(hoverStyle);
         
         // Set up tracking state
-        (window as any).hoverControlsActive = true;
+        window.hoverControlsActive = true;
       } else {
         document.documentElement.classList.remove('accessibility-hover-controls');
         
@@ -767,7 +837,7 @@ it('toggles hover controls', () => {
         indicators.forEach(indicator => indicator.remove());
         
         // Update tracking state
-        (window as any).hoverControlsActive = false;
+        window.hoverControlsActive = false;
       }
       
       localStorage.setItem('accessibility-hover-controls', String(message.enabled));
@@ -782,7 +852,7 @@ it('toggles hover controls', () => {
   messageHandler(
     { action: 'toggleHoverControls', enabled: true },
     {},
-    (response: any) => {
+    (response: ResponseMessage) => {
       expect(response.status).toBe('success');
     }
   );
@@ -806,7 +876,7 @@ it('toggles hover controls', () => {
   Object.defineProperty(mockHoverEvent, 'target', { value: link });
   
   // Manually call what would be the mousemove handler
-  if ((window as any).hoverControlsActive) {
+  if (window.hoverControlsActive) {
     const indicator = document.createElement('div');
     indicator.className = 'accessibility-hover-indicator';
     document.body.appendChild(indicator);
@@ -820,7 +890,7 @@ it('toggles hover controls', () => {
   messageHandler(
     { action: 'toggleHoverControls', enabled: false },
     {},
-    (response: any) => {
+    (response: ResponseMessage) => {
       expect(response.status).toBe('success');
     }
   );
@@ -842,18 +912,18 @@ it('toggles keyboard navigation auto-click feature', () => {
 
   // Add key navigation to message handler
   const originalHandler = createMessageHandler();
-  const messageHandler = function(message: any, sender: any, sendResponse: (response: any) => void) {
+  const messageHandler = function(message: BaseMessage, sender: MessageSender, sendResponse: (response: ResponseMessage) => void) {
     if (message.action === 'toggleKeyboardNav') {
       if (message.enabled) {
         document.documentElement.classList.add('accessibility-keyboard-nav');
-        (window as any).keyboardNavActive = true;
-        (window as any).keyboardClickDelay = message.delay || 1500; // Default delay
+        window.keyboardNavActive = true;
+        window.keyboardClickDelay = message.delay || 1500; // Default delay
       } else {
         document.documentElement.classList.remove('accessibility-keyboard-nav');
-        (window as any).keyboardNavActive = false;
+        window.keyboardNavActive = false;
         
         // Clear any pending timers (simulated)
-        (window as any).mockKeyboardTimer = null;
+        window.mockKeyboardTimer = null;
       }
       
       localStorage.setItem('accessibility-keyboard-nav', String(message.enabled));
@@ -876,24 +946,24 @@ it('toggles keyboard navigation auto-click feature', () => {
   messageHandler(
     { action: 'toggleKeyboardNav', enabled: true, delay: 100 },
     {},
-    (response: any) => {
+    (response: ResponseMessage) => {
       expect(response.status).toBe('success');
     }
   );
   
   // Check if feature was enabled
   expect(document.documentElement.classList.contains('accessibility-keyboard-nav')).toBe(true);
-  expect((window as any).keyboardNavActive).toBe(true);
-  expect((window as any).keyboardClickDelay).toBe(100);
+  expect(window.keyboardNavActive).toBe(true);
+  expect(window.keyboardClickDelay).toBe(100);
   
   // Simulate focus event
   button.focus();
   
   // In actual implementation, this would set a timer - we'll simulate that
-  if ((window as any).keyboardNavActive) {
-    (window as any).mockKeyboardTimer = setTimeout(() => {
+  if (window.keyboardNavActive) {
+    window.mockKeyboardTimer = setTimeout(() => {
       button.click();
-    }, (window as any).keyboardClickDelay);
+    }, window.keyboardClickDelay);
   }
   
   // Fast-forward timer
@@ -906,14 +976,14 @@ it('toggles keyboard navigation auto-click feature', () => {
   messageHandler(
     { action: 'toggleKeyboardNav', enabled: false },
     {},
-    (response: any) => {
+    (response: ResponseMessage) => {
       expect(response.status).toBe('success');
     }
   );
   
   // Check if feature was disabled
   expect(document.documentElement.classList.contains('accessibility-keyboard-nav')).toBe(false);
-  expect((window as any).keyboardNavActive).toBe(false);
+  expect(window.keyboardNavActive).toBe(false);
   
   // Reset click flag
   wasClicked = false;
@@ -922,7 +992,7 @@ it('toggles keyboard navigation auto-click feature', () => {
   button.focus();
   
   // Since feature is disabled, no timer should be set
-  expect((window as any).mockKeyboardTimer).toBeNull();
+  expect(window.mockKeyboardTimer).toBeNull();
   
   // Fast-forward timer again
   vi.advanceTimersByTime(150);
@@ -1002,8 +1072,8 @@ it('initializes features from localStorage values', () => {
     // Keyboard Navigation
     if (localStorage.getItem('accessibility-keyboard-nav') === 'true') {
       document.documentElement.classList.add('accessibility-keyboard-nav');
-      (window as any).keyboardNavActive = true;
-      (window as any).keyboardClickDelay = parseInt(
+      window.keyboardNavActive = true;
+      window.keyboardClickDelay = parseInt(
         localStorage.getItem('accessibility-keyboard-nav-delay') || '1500',
         10
       );
@@ -1037,6 +1107,6 @@ it('initializes features from localStorage values', () => {
   expect(document.querySelector('link[data-accessibility-large-targets]')).not.toBeNull();
   
   // Check keyboard navigation settings
-  expect((window as any).keyboardNavActive).toBe(true);
-  expect((window as any).keyboardClickDelay).toBe(2000);
+  expect(window.keyboardNavActive).toBe(true);
+  expect(window.keyboardClickDelay).toBe(2000);
 });

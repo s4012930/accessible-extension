@@ -1,18 +1,36 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, MockedFunction } from 'vitest';
 import { JSDOM } from 'jsdom';
+
+// Define types for message handler
+interface RequestMessage {
+  action: string;
+  enabled?: boolean;
+  // Add other potential properties if needed
+  [key: string]: unknown; 
+}
+
+type SendResponseCallback = (response: { status: string; [key: string]: unknown }) => void;
+
+
+type MessageHandlerFunction = (
+  request: RequestMessage,
+  sender: chrome.runtime.MessageSender,
+  sendResponse: SendResponseCallback
+) => boolean | undefined;
+
 
 describe('Content Script Message Handler', () => {
   let mockDocument: Document;
   let localStorage: Storage;
-  let messageHandler: Function;
-  let sendResponse: any;
+  let messageHandler: MessageHandlerFunction;
+  let sendResponse: MockedFunction<SendResponseCallback>;
   
   beforeEach(() => {
     // Setup DOM environment
     const dom = new JSDOM('<!DOCTYPE html><html><head></head><body></body></html>');
     mockDocument = dom.window.document;
     global.document = mockDocument;
-    global.window = dom.window as any;
+    global.window = dom.window as unknown as Window & typeof globalThis;
     
     // Mock localStorage
     localStorage = {
@@ -34,10 +52,10 @@ describe('Content Script Message Handler', () => {
           addListener: vi.fn()
         }
       }
-    } as any;
+    } as unknown as typeof chrome;
     
     // Create a simplified version of a message handler that matches the structure of your content-script
-    messageHandler = (request: any, _sender: any, sendResponse: Function) => {
+    messageHandler = (request: RequestMessage, _sender: chrome.runtime.MessageSender, sendResponseCallback: SendResponseCallback) => {
       // Handle high contrast toggle
       if (request.action === "toggleHighContrast") {
         if (request.enabled) {
@@ -47,7 +65,7 @@ describe('Content Script Message Handler', () => {
           document.documentElement.classList.remove('accessibility-high-contrast');
           localStorage.setItem('accessibility-high-contrast', 'false');
         }
-        sendResponse({ status: "success" });
+        sendResponseCallback({ status: "success" });
         return true;
       }
       
@@ -60,7 +78,7 @@ describe('Content Script Message Handler', () => {
           document.documentElement.classList.remove('accessibility-reduced-motion');
           localStorage.setItem('accessibility-reduced-motion', 'false');
         }
-        sendResponse({ status: "success" });
+        sendResponseCallback({ status: "success" });
         return true;
       }
       
@@ -73,7 +91,7 @@ describe('Content Script Message Handler', () => {
           document.documentElement.classList.remove('accessibility-dyslexia-font');
           localStorage.setItem('accessibility-dyslexia-font', 'false');
         }
-        sendResponse({ status: "success" });
+        sendResponseCallback({ status: "success" });
         return true;
       }
       
