@@ -17,7 +17,7 @@ export default class FeatureReporter {
   }
 
   onInit(ctx) {
-    console.log('\n🧪 Running Accessibility Extension Tests...\n');
+    console.log('\n Running Accessibility Extension Tests...\n');
   }
 
   // Categorize the test based on name/file
@@ -66,44 +66,44 @@ export default class FeatureReporter {
   }
 
   onFinished(files, errors) {
-    console.log(`\n✅ Test Results: ${this.passedTests}/${this.totalTests} tests passed\n`);
+    console.log(`\n Test Results: ${this.passedTests}/${this.totalTests} tests passed\n`);
     
     // Vision Support Features
     if (this.results.vision.length > 0) {
-      console.log('📋 Vision Support Features');
+      console.log(' Vision Support Features');
       this.results.vision.forEach(test => {
-        console.log(`  ✓ PASS: ${test.name}`);
+        console.log(`   PASS: ${test.name}`);
       });
       console.log('');
     }
     
     // Motor Support Features
     if (this.results.motor.length > 0) {
-      console.log('📋 Motor Support Features');
+      console.log(' Motor Support Features');
       this.results.motor.forEach(test => {
-        console.log(`  ✓ PASS: ${test.name}`);
+        console.log(`   PASS: ${test.name}`);
       });
       console.log('');
     }
     
     // Cognitive Support Features
     if (this.results.cognitive.length > 0) {
-      console.log('📋 Cognitive Support Features');
+      console.log(' Cognitive Support Features');
       this.results.cognitive.forEach(test => {
-        console.log(`  ✓ PASS: ${test.name}`);
+        console.log(`   PASS: ${test.name}`);
       });
       console.log('');
     }
     
     // Core Extension Functionality
     if (this.results.core.length > 0) {
-      console.log('📋 Core Extension Functionality');
+      console.log(' Core Extension Functionality');
       this.results.core.forEach(test => {
-        console.log(`  ✓ PASS: ${test.name}`);
+        console.log(`   PASS: ${test.name}`);
       });
       console.log('');
     }
     
-    console.log(`\n✨ Completed in ${Date.now()}ms\n`);
+    console.log(`\n Completed in ${Date.now()}ms\n`);
   }
 }
