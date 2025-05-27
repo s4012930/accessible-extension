@@ -1,0 +1,49 @@
+/* Styling for hover controls overlay */
+.accessibility-hover-indicator {
+  position: absolute;
+  border-radius: 3px;
+  pointer-events: none; /* Allows clicks to pass through */
+  z-index: 100000;
+  box-shadow: 0 0 0 2px #4d90fe;
+  background-color: rgba(77, 144, 254, 0.2);
+}
+
+.accessibility-hover-timer {
+  position: absolute;
+  height: 4px;
+  width: 0;
+  bottom: -5px;
+  left: 0;
+  background-color: #4d90fe;
+  transition: width 0.01s linear; /* Smooth transition for timer progress */
+}
+
+/* Add an indicator for when hover is almost complete */
+.accessibility-hover-almost-complete .accessibility-hover-timer {
+  background-color: #57bb8a;
+}
+
+/* Circle animation that appears when hover is activated */
+.accessibility-hover-click-animation {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: rgba(87, 187, 138, 0.7);
+  transform: scale(0);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 100001;
+  animation: accessibility-hover-click 0.5s ease-out forwards;
+}
+
+@keyframes accessibility-hover-click {
+  0% {
+    transform: scale(0);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}

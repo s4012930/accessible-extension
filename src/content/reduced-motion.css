@@ -1,0 +1,43 @@
+/* Simplified Reduced Motion CSS */
+
+/* Target the HTML element with our class */
+html.accessibility-reduced-motion *,
+html.accessibility-reduced-motion *::before,
+html.accessibility-reduced-motion *::after {
+  /* Disable CSS animations & transitions by zeroing duration */
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  animation-play-state: paused !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+  
+  /* Ensure no smooth scrolling */
+  scroll-behavior: auto !important;
+}
+
+/* Keep some essential UI elements functional */
+html.accessibility-reduced-motion button,
+html.accessibility-reduced-motion a,
+html.accessibility-reduced-motion input,
+html.accessibility-reduced-motion select,
+html.accessibility-reduced-motion textarea {
+  pointer-events: auto !important;
+}
+
+/* Fix for some common animation frameworks */
+html.accessibility-reduced-motion .animate__animated,
+html.accessibility-reduced-motion .aos-animate,
+html.accessibility-reduced-motion [data-aos],
+html.accessibility-reduced-motion [class*="motion"],
+html.accessibility-reduced-motion [class*="animate"] {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+}
+
+/* Allow videos to display but paused */
+html.accessibility-reduced-motion video,
+html.accessibility-reduced-motion img[src$=".gif"],
+html.accessibility-reduced-motion img[src$=".GIF"] {
+  animation-play-state: paused !important;
+}

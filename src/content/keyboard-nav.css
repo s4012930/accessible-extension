@@ -1,0 +1,37 @@
+/* keyboardnav.css */
+
+/* 1. Override all outline styles */
+*:focus {
+  outline: none !important;
+  outline-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* 2. Apply our custom focus styles when using keyboard */
+*:focus-visible {
+  outline: 3px solid #ff9800 !important;   /* high-contrast orange */
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.3) !important;
+}
+
+/* 3. Special styles for interactive elements and checkboxes */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible,
+[role="checkbox"]:focus-visible,
+[role="radio"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="menuitem"]:focus-visible,
+.btn:focus-visible,
+.button:focus-visible,
+label:has(input[type="checkbox"]):focus-visible,
+label:has(input[type="radio"]):focus-visible,
+div[tabindex]:focus-visible,
+span[tabindex]:focus-visible {
+  outline: 3px dashed hsl(130, 90%, 54%) !important;  /* green dashed for interactive elements */
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(0, 196, 65, 0.3) !important;
+}

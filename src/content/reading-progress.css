@@ -1,0 +1,31 @@
+/* Reading Progress Indicator */
+.accessibility-reading-progress-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 10px;
+  z-index: 999999;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.accessibility-reading-progress-bar {
+  height: 100%;
+  background: rgba(128, 0, 255, 0.7);
+  width: 0%;
+  transition: width 0.2s ease;
+}
+
+/* For dark mode or high contrast mode, adjust the background */
+.dark .accessibility-reading-progress-container,
+.accessibility-high-contrast .accessibility-reading-progress-container {
+  background: rgba(100, 100, 100, 0.3);
+}
+
+/* Higher contrast in colorblind modes */
+.accessibility-protanopia .accessibility-reading-progress-bar,
+.accessibility-deuteranopia .accessibility-reading-progress-bar,
+.accessibility-tritanopia .accessibility-reading-progress-bar {
+  background: rgba(50, 150, 255, 0.8);
+}

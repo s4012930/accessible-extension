@@ -1,0 +1,134 @@
+/* Auto-scroll accessibility feature CSS */
+
+/* Scroll zone containers at top and bottom of page */
+.accessibility-auto-scroll-zone {
+  position: fixed;
+  left: 0;
+  width: 100%;
+  height: 100px; /* Even larger height for scroll zones */
+  z-index: 999999;
+  opacity: 0.7; /* Higher opacity */
+  transition: opacity 0.3s ease, background-color 0.3s ease;
+  pointer-events: none; /* Initially not capturing mouse events */
+  display: none; /* Hidden by default */
+  box-shadow: inset 0 0 15px rgba(0, 119, 255, 0.5); /* Inner glow */
+}
+
+/* Only show scroll zones when auto-scroll is enabled */
+html.accessibility-auto-scroll .accessibility-auto-scroll-zone {
+  pointer-events: auto !important; /* Force pointer events to be captured */
+  visibility: visible !important; /* Ensure visibility */
+  display: block !important; /* Force display */
+}
+
+/* Top scroll zone */
+.accessibility-auto-scroll-zone.top {
+  top: 0;
+  background: linear-gradient(to bottom, rgba(0, 119, 255, 0.5), transparent);
+  border-bottom: 2px dashed rgba(0, 119, 255, 0.7); /* Add border to make more visible */
+}
+
+/* Bottom scroll zone */
+.accessibility-auto-scroll-zone.bottom {
+  bottom: 0;
+  background: linear-gradient(to top, rgba(0, 119, 255, 0.5), transparent);
+  border-top: 2px dashed rgba(0, 119, 255, 0.7); /* Add border to make more visible */
+}
+
+/* Hover effects to make zones more visible when active */
+html.accessibility-auto-scroll .accessibility-auto-scroll-zone:hover {
+  opacity: 0.8; /* More visible on hover */
+  box-shadow: 0 0 10px rgba(0, 119, 255, 0.5); /* Add glow effect */
+}
+
+/* Indicator arrows in scroll zones to show direction */
+.accessibility-auto-scroll-zone::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 30px; /* Larger arrow */
+  height: 30px; /* Larger arrow */
+  border-style: solid;
+  transform: translateX(-50%);
+  opacity: 0.9; /* More visible */
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.7)); /* Glow effect */
+}
+
+.accessibility-auto-scroll-zone.top::after {
+  top: 25px;
+  border-width: 0 5px 5px 0; /* Thicker border */
+  transform: translateX(-50%) rotate(-135deg); /* Changed to point upward */
+  border-color: #ffffff;
+}
+
+.accessibility-auto-scroll-zone.bottom::after {
+  bottom: 25px;
+  border-width: 0 5px 5px 0; /* Thicker border */
+  transform: translateX(-50%) rotate(45deg); /* Changed to point downward */
+  border-color: #ffffff;
+}
+
+/* High contrast support */
+html.accessibility-auto-scroll.accessibility-high-contrast .accessibility-auto-scroll-zone.top {
+  background: linear-gradient(to bottom, rgba(255, 255, 0, 0.5), transparent);
+}
+
+html.accessibility-auto-scroll.accessibility-high-contrast .accessibility-auto-scroll-zone.bottom {
+  background: linear-gradient(to top, rgba(255, 255, 0, 0.5), transparent);
+}
+
+html.accessibility-auto-scroll.accessibility-high-contrast .accessibility-auto-scroll-zone::after {
+  border-color: #000000;
+}
+
+/* Auto-scroll notification */
+.accessibility-auto-scroll-notification {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 20px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 5px;
+  z-index: 1000000;
+  font-weight: bold;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+/* Debug text in scroll zones */
+.accessibility-auto-scroll-zone .accessibility-auto-scroll-debug {
+  position: absolute;
+  left: 10px;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  text-shadow: 1px 1px 2px black;
+}
+
+.accessibility-auto-scroll-zone.top .accessibility-auto-scroll-debug {
+  top: 10px;
+}
+
+.accessibility-auto-scroll-zone.bottom .accessibility-auto-scroll-debug {
+  bottom: 10px;
+}
+
+/* Always-present indicator when auto-scroll is enabled */
+html.accessibility-auto-scroll::after {
+  content: "Auto-Scroll Enabled";
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 5px;
+  background-color: rgba(0, 119, 255, 0.8);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: bold;
+  z-index: 999998;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+}
