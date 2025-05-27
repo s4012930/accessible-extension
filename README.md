@@ -118,7 +118,7 @@ The extension is designed to be modular and scalable, with each accessibility fe
     Go to Command Prompt, VSCode or a terminal of your choice.
 
     ```bash
-    git clone <https://github.com/s4012930/accessible-extension>
+    git clone https://github.com/s4012930/accessible-extension
     cd accessible-extension
     ```
     <img src="img/clone-repo.PNG" alt="Clone Repository Screenshot" width="100%" height="100%"/>
