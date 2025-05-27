@@ -10,7 +10,7 @@
 
 # Accessibility Booster Extension
 
-<img src="img/extension-screenshot.PNG" alt="Extension Screenshot" width="100%" height="100%"/>
+<img src="img/extension-screenshot.PNG" alt="Extension Screenshot" width="30%" height="30%"/>
 
 **Version:** 1.0.0
 
@@ -269,5 +269,3 @@ For questions or support, please contact me: s4012930@student.rmit.edu.au
 
 - Icons by [Lucide](https://lucide.dev/)
 - Fonts by [OpenDyslexic](https://opendyslexic.org/)
-=======
-# accessible-extension
