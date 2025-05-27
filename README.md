@@ -130,6 +130,8 @@ The extension is designed to be modular and scalable, with each accessibility fe
     ```
     <img src="img/npm-install.PNG" alt="NPM Install Screenshot" width="100%" height="100%"/>
 
+    <img src="img/npm-build.PNG" alt="NPM Build Screenshot" width="100%" height="100%"/>
+
 3. **Load the Extension in Chrome:**
     Open Chrome and navigate to `chrome://extensions`.
       <img src="img/chrome-extensions-page.PNG" alt="Chrome Extensions Page" width="100%" height="100%"/>
