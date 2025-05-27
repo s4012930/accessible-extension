@@ -126,10 +126,12 @@ The extension is designed to be modular and scalable, with each accessibility fe
 2. **Build the Extension:**
     ```bash
     npm install
-    npm run build
     ```
     <img src="img/npm-install.PNG" alt="NPM Install Screenshot" width="100%" height="100%"/>
 
+    ```bash
+    npm run build
+    ```
     <img src="img/npm-build.PNG" alt="NPM Build Screenshot" width="100%" height="100%"/>
 
 3. **Load the Extension in Chrome:**
