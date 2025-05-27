@@ -108,7 +108,6 @@ The extension is designed to be modular and scalable, with each accessibility fe
 ## Demo
 
 <img src="img/demo-animated.gif" alt="Animated demo of extension features" width="100%" height="100%"/>
-<p align="center"><i>Replace with a GIF showing the extension in action.</i></p>
 
 ---
 
@@ -123,7 +122,6 @@ The extension is designed to be modular and scalable, with each accessibility fe
     cd accessible-extension
     ```
     <img src="img/clone-repo.PNG" alt="Clone Repository Screenshot" width="100%" height="100%"/>
-    <i>Replace with a screenshot of cloning the repo in your terminal.</i>
 
 2. **Build the Extension:**
     ```bash
@@ -131,18 +129,17 @@ The extension is designed to be modular and scalable, with each accessibility fe
     npm run build
     ```
     <img src="img/npm-install.PNG" alt="NPM Install Screenshot" width="100%" height="100%"/>
-    <i>Replace with a screenshot of running npm install/build.</i>
 
 3. **Load the Extension in Chrome:**
-    * Open Chrome and navigate to `chrome://extensions`.
+    Open Chrome and navigate to `chrome://extensions`.
       <img src="img/chrome-extensions-page.PNG" alt="Chrome Extensions Page" width="100%" height="100%"/>
-    * Enable "Developer mode" using the toggle switch in the top right corner.
+    Enable "Developer mode" using the toggle switch in the top right corner.
       <img src="img/developer-mode-toggle.PNG" alt="Developer Mode Toggle" width="100%" height="100%"/>
-    * Click on the "Load unpacked" button.
+    Click on the "Load unpacked" button.
       <img src="img/load-unpacked.PNG" alt="Load Unpacked Button" width="100%" height="100%"/>
-    * Select the [dist](http://_vscodecontentref_/0) folder.
+    Select the [dist](http://_vscodecontentref_/0) folder.
       <img src="img/select-dist-folder.PNG" alt="Select Dist Folder" width="100%" height="100%"/>
-    * See enabled Accessibility Booster 1.0.0 inside of extensions.
+    See enabled Accessibility Booster 1.0.0 inside of extensions.
       <img src="img/enabled-accessibility-booster.PNG" alt="Enabled Accessibility Booster Extension" width="100%" height="100%"/>
 
 ---
