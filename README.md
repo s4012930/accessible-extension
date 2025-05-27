@@ -10,7 +10,7 @@
 
 # Accessibility Booster Extension
 
-<img src="img/extension-screenshot.png" alt="Extension Screenshot" width="100%" height="100%"/>
+<img src="img/extension-screenshot.PNG" alt="Extension Screenshot" width="100%" height="100%"/>
 
 **Version:** 1.0.0
 
@@ -101,7 +101,7 @@ The extension is designed to be modular and scalable, with each accessibility fe
 
 ## Screenshots
 
-- <img src="img/feature-example.png" alt="Feature Example Screenshot" width="100%" height="100%"/>  
+- <img src="img/feature-example.PNG" alt="Feature Example Screenshot" width="100%" height="100%"/>  
 
 ---
 
@@ -122,7 +122,7 @@ The extension is designed to be modular and scalable, with each accessibility fe
     git clone <https://github.com/s4012930/accessible-extension>
     cd accessible-extension
     ```
-    <img src="img/clone-repo.png" alt="Clone Repository Screenshot" width="100%" height="100%"/>
+    <img src="img/clone-repo.PNG" alt="Clone Repository Screenshot" width="100%" height="100%"/>
     <i>Replace with a screenshot of cloning the repo in your terminal.</i>
 
 2. **Build the Extension:**
@@ -130,20 +130,20 @@ The extension is designed to be modular and scalable, with each accessibility fe
     npm install
     npm run build
     ```
-    <img src="img/npm-install.png" alt="NPM Install Screenshot" width="100%" height="100%"/>
+    <img src="img/npm-install.PNG" alt="NPM Install Screenshot" width="100%" height="100%"/>
     <i>Replace with a screenshot of running npm install/build.</i>
 
 3. **Load the Extension in Chrome:**
     * Open Chrome and navigate to `chrome://extensions`.
-      <img src="img/chrome-extensions-page.png" alt="Chrome Extensions Page" width="100%" height="100%"/>
+      <img src="img/chrome-extensions-page.PNG" alt="Chrome Extensions Page" width="100%" height="100%"/>
     * Enable "Developer mode" using the toggle switch in the top right corner.
-      <img src="img/developer-mode-toggle.png" alt="Developer Mode Toggle" width="100%" height="100%"/>
+      <img src="img/developer-mode-toggle.PNG" alt="Developer Mode Toggle" width="100%" height="100%"/>
     * Click on the "Load unpacked" button.
-      <img src="img/load-unpacked.png" alt="Load Unpacked Button" width="100%" height="100%"/>
+      <img src="img/load-unpacked.PNG" alt="Load Unpacked Button" width="100%" height="100%"/>
     * Select the [dist](http://_vscodecontentref_/0) folder.
-      <img src="img/select-dist-folder.png" alt="Select Dist Folder" width="100%" height="100%"/>
+      <img src="img/select-dist-folder.PNG" alt="Select Dist Folder" width="100%" height="100%"/>
     * See enabled Accessibility Booster 1.0.0 inside of extensions.
-      <img src="img/enabled-accessibility-booster.png" alt="Enabled Accessibility Booster Extension" width="100%" height="100%"/>
+      <img src="img/enabled-accessibility-booster.PNG" alt="Enabled Accessibility Booster Extension" width="100%" height="100%"/>
 
 ---
 
