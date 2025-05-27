@@ -1,0 +1,30 @@
+/* Highlight links styles */
+.accessibility-highlight-links a,
+.accessibility-highlight-links button,
+.accessibility-highlight-links [role="button"],
+.accessibility-highlight-links input[type="button"],
+.accessibility-highlight-links input[type="submit"] {
+  outline: 3px solid rgba(128, 0, 255, 0.7) !important;
+  outline-offset: 2px !important;
+  transition: outline-color 0.2s ease !important;
+}
+
+.accessibility-highlight-links a:hover,
+.accessibility-highlight-links button:hover,
+.accessibility-highlight-links [role="button"]:hover,
+.accessibility-highlight-links input[type="button"]:hover,
+.accessibility-highlight-links input[type="submit"]:hover {
+  outline-color: rgba(128, 0, 255, 1) !important;
+}
+
+/* Style for link icons */
+.accessibility-highlight-links-icon {
+  display: inline-block;
+  margin-left: 4px;
+  width: 14px;
+  height: 14px;
+  background-color: rgba(128, 0, 255, 0.8);
+  border-radius: 50%;
+  vertical-align: middle;
+  pointer-events: none;
+}

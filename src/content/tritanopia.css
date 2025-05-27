@@ -1,0 +1,66 @@
+/* Tritanopia CSS Stylesheet */
+html.accessibility-tritanopia {
+  /* More pronounced filter for tritanopia */
+  filter: contrast(1.4) brightness(1) saturate(0.2) hue-rotate(30deg) !important;
+}
+
+/* If high contrast is also enabled, a different approach is required */
+html.accessibility-tritanopia.accessibility-high-contrast {
+  filter: invert(100%) hue-rotate(180deg) contrast(1.4) saturate(0.2) !important;
+}
+
+html.accessibility-tritanopia img, 
+html.accessibility-tritanopia video {
+  /* Better adjustment for media */
+  filter: contrast(1.2) saturate(0.5) !important;
+}
+
+html.accessibility-tritanopia.accessibility-high-contrast img,
+html.accessibility-tritanopia.accessibility-high-contrast video {
+  filter: invert(100%) hue-rotate(180deg) contrast(1.2) saturate(0.5) !important;
+}
+
+/* Make important action elements more distinguishable */
+html.accessibility-tritanopia button, 
+html.accessibility-tritanopia a.btn, 
+html.accessibility-tritanopia input[type="button"], 
+html.accessibility-tritanopia input[type="submit"], 
+html.accessibility-tritanopia input[type="reset"] {
+  outline: 2px solid #000 !important;
+  outline-offset: 2px;
+  border-radius: 4px !important;
+}
+
+/* Enhance form field visibility */
+html.accessibility-tritanopia input, 
+html.accessibility-tritanopia select, 
+html.accessibility-tritanopia textarea {
+  border: 2px solid #000 !important;
+}
+
+/* Add text indicators for blue/yellow status colours */
+html.accessibility-tritanopia .primary, 
+html.accessibility-tritanopia .info, 
+html.accessibility-tritanopia .secondary,
+html.accessibility-tritanopia .warning, 
+html.accessibility-tritanopia .alert, 
+html.accessibility-tritanopia .notification {
+  position: relative;
+}
+
+/* Add status indicators where needed */
+html.accessibility-tritanopia .primary::before, 
+html.accessibility-tritanopia .info::before, 
+html.accessibility-tritanopia .secondary::before {
+  content: "■ ";
+  font-weight: bold;
+  display: inline-block;
+}
+
+html.accessibility-tritanopia .warning::before, 
+html.accessibility-tritanopia .alert::before, 
+html.accessibility-tritanopia .notification::before {
+  content: "▲ ";
+  font-weight: bold;
+  display: inline-block;
+}

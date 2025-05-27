@@ -1,0 +1,68 @@
+/* Protanopia CSS Stylesheet */
+html.accessibility-protanopia {
+  /* More pronounced filter for protanopia */
+  filter: contrast(1.4) brightness(1.2) saturate(0.5) hue-rotate(-15deg) !important;
+}
+
+/* If high contrast is also enabled, a different approach is required */
+html.accessibility-protanopia.accessibility-high-contrast {
+  filter: invert(100%) hue-rotate(180deg) contrast(1.3) saturate(0.6) !important;
+}
+
+html.accessibility-protanopia img, 
+html.accessibility-protanopia video {
+  /* Preserve some colour perception for media */
+  filter: contrast(1.3) saturate(0.7) !important;
+}
+
+html.accessibility-protanopia.accessibility-high-contrast img,
+html.accessibility-protanopia.accessibility-high-contrast video {
+  filter: invert(100%) hue-rotate(180deg) contrast(1.3) saturate(0.7) !important;
+}
+
+/* Make important action elements more distinguishable */
+html.accessibility-protanopia button, 
+html.accessibility-protanopia a.btn, 
+html.accessibility-protanopia input[type="button"], 
+html.accessibility-protanopia input[type="submit"], 
+html.accessibility-protanopia input[type="reset"] {
+  border-radius: 4px !important;
+}
+
+/* Enhance form field visibility */
+html.accessibility-protanopia input, 
+html.accessibility-protanopia select, 
+html.accessibility-protanopia textarea {
+  border: 2px solid #000 !important;
+}
+
+/* Add text indicators for red/green status colours */
+html.accessibility-protanopia .danger, 
+html.accessibility-protanopia .error, 
+html.accessibility-protanopia .alert, 
+html.accessibility-protanopia .warning,
+html.accessibility-protanopia .success, 
+html.accessibility-protanopia .info, 
+html.accessibility-protanopia .status {
+  position: relative;
+}
+
+/* Keep only essential status indicators */
+html.accessibility-protanopia .danger::before, 
+html.accessibility-protanopia .error::before, 
+html.accessibility-protanopia .alert::before, 
+html.accessibility-protanopia .warning::before {
+  content: "▲ ";
+  font-weight: bold;
+}
+
+html.accessibility-protanopia .success::before {
+  content: "✓ ";
+  font-weight: bold;
+}
+
+html.accessibility-protanopia .info::before, 
+html.accessibility-protanopia .status::before {
+  content: "■ ";
+  font-weight: bold;
+}

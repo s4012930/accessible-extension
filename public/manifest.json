@@ -1,0 +1,70 @@
+{
+    "manifest_version": 3,
+    "name": "Accessibility Booster",
+    "short_name": "AccBooster",
+    "description": "Adds Accessibility features to any website.",
+    "version": "1.0.0",
+  
+    "action": {
+      "default_popup": "popup.html"
+    },
+    
+    "commands": {
+      "_execute_action": {
+        "suggested_key": {
+          "default": "Ctrl+Shift+F",
+          "mac": "Command+Shift+F"
+        },
+        "description": "Open Accessibility Booster"
+      }
+    },
+  
+    "background": {
+      "service_worker": "background.js"
+    },
+  
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["content-script.js"],
+        "run_at": "document_idle"
+      }
+    ],
+
+    "web_accessible_resources": [
+      {
+        "resources": [
+          "high-contrast.css", 
+          "dyslexic.css", 
+          "reading-line.css", 
+          "colorblind.css", 
+          "deuteranopia.css", 
+          "protanopia.css", 
+          "tritanopia.css",
+          "reduced-motion.css",
+          "keyboard-nav.css",
+          "large-targets.css",
+          "custom-cursor.css",
+          "auto-scroll.css",
+          "hover-controls.css",
+          "focus-mode.css",
+          "highlight-links.css",
+          "reading-progress.css",
+          "image-descriptions.css",
+          "fonts/*",
+          "cursors/*"
+        ],
+        "matches": ["<all_urls>"]
+      }
+    ],
+  
+    "permissions": [
+      "storage",
+      "activeTab",
+      "scripting"
+    ],
+  
+    "host_permissions": [
+      "<all_urls>"
+    ]
+  }

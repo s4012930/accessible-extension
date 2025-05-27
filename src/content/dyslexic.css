@@ -1,0 +1,38 @@
+/* OpenDyslexic Font Support - Using Local Files */
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('chrome-extension://__MSG_@@extension_id__/fonts/OpenDyslexic-Regular.woff2') format('woff2'),
+       url('chrome-extension://__MSG_@@extension_id__/fonts/OpenDyslexic-Regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('chrome-extension://__MSG_@@extension_id__/fonts/OpenDyslexic-Bold.woff2') format('woff2'),
+       url('chrome-extension://__MSG_@@extension_id__/fonts/OpenDyslexic-Bold.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('chrome-extension://__MSG_@@extension_id__/fonts/OpenDyslexic-Italic.woff2') format('woff2'),
+       url('chrome-extension://__MSG_@@extension_id__/fonts/OpenDyslexic-Italic.woff') format('woff');
+  font-weight: normal;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('chrome-extension://__MSG_@@extension_id__/fonts/OpenDyslexic-BoldItalic.woff2') format('woff2'),
+       url('chrome-extension://__MSG_@@extension_id__/fonts/OpenDyslexic-BoldItalic.woff') format('woff');
+  font-weight: bold;
+  font-style: italic;
+}
+
+html.accessibility-dyslexia-font * {
+  font-family: 'OpenDyslexic', sans-serif !important;
+  line-height: 1.4 !important;
+  letter-spacing: 0.03em !important;
+}
