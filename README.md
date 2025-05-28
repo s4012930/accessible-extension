@@ -114,27 +114,42 @@ The extension is designed to be modular and scalable, with each accessibility fe
 
 ## Prerequisites
 
-- [Git](https://git-scm.com/downloads/win) installed
+**Note:** If doing **1A** for installation download both Git and Node.js. If doing **1B** only download Node.js
+
+- <a href="https://git-scm.com/downloads/win" target="_blank">Git</a> installed
   
-  <img src="img/download-git.PNG" alt="Download Git Screenshot" width="100%" height="100%"/>
+  <img src="img/download-git.PNG" alt="Download Git Screenshot" width="80%" height="80%"/>
   
-- [Node.js](https://nodejs.org/en/download) installed
+- <a href="https://nodejs.org/en/download" target="_blank">Node.js</a> installed
   
-  <img src="img/download-nodejs.PNG" alt="Download Node JS" width="100%" height="100%"/>
+  <img src="img/download-nodejs.PNG" alt="Download Node JS" width="80%" height="80%"/>
 
 ---
 
 ## Installation
 
-1. **Download or Clone the Repository:**
-    
-    Go to Command Prompt, VSCode or a terminal of your choice.
+**Note:** These instructions assume you are using Windows 10/11 and have installed Node.js as shown above. If you encounter issues, see the Troubleshooting section below.
 
-    ```bash
-    git clone https://github.com/s4012930/accessible-extension
-    cd accessible-extension
-    ```
-    <img src="img/clone-repo.PNG" alt="Clone Repository Screenshot" width="100%" height="100%"/>
+1a. **Clone the Repository with Git**
+
+Open Command Prompt, VSCode, or a terminal of your choice:
+
+```bash
+git clone https://github.com/s4012930/accessible-extension
+cd accessible-extension
+```
+<img src="img/clone-repo.PNG" alt="Clone Repository Screenshot" width="100%" height="100%"/>
+
+1b. **Download the Latest Release (No Git Required)**
+
+1. Go to the [Releases page](https://github.com/s4012930/accessible-extension/releases) on GitHub.
+2. Download the latest `.zip` release.
+3. Extract the zip file to a folder (e.g., `accessible-extension-v1.0.X`).
+4. Open Command Prompt and `cd` into that folder.
+
+---
+
+**Continue with the following steps for both methods:**
 
 2. **Build the Extension:**
     ```bash
@@ -246,6 +261,13 @@ This extension does **NOT** collect or transmit any personal data. All settings 
   Make sure you selected the correct [dist](http://_vscodecontentref_/1) folder and that your manifest is valid.
 - **Feature not working on a site?**  
   Some sites restrict content scripts. Try refreshing the page or checking permissions.
+- **"git" or "npm" not recognized?**  
+  Ensure you have [Git](https://git-scm.com/downloads/win) and [Node.js](https://nodejs.org/en/download) installed.  
+  If you just installed them, close and reopen your terminal or Command Prompt before running commands again.
+- **Permission errors or "EACCES"/"EPERM" errors during install?**  
+  Try running your terminal or Command Prompt as an administrator:  
+  - Right-click the Command Prompt or terminal icon and select **"Run as administrator"**.  
+  - Then try running the commands again.
 
 ---
 
