@@ -28,6 +28,7 @@
 - [Architecture Diagram](#architecture-diagram)
 - [Screenshots](#screenshots)
 - [Demo](#demo)
+- [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Usage](#usage)
 - [Available Scripts](#available-scripts)
@@ -108,6 +109,18 @@ The extension is designed to be modular and scalable, with each accessibility fe
 ## Demo
 
 <img src="img/demo-animated.gif" alt="Animated demo of extension features" width="100%" height="100%"/>
+
+---
+
+## Prerequisites
+
+- [Git](https://git-scm.com/downloads/win) installed
+  
+  <img src="img/download-git.PNG" alt="Download Git Screenshot" width="100%" height="100%"/>
+  
+- [Node.js](https://nodejs.org/en/download) installed
+  
+  <img src="img/download-nodejs.PNG" alt="Download Node JS" width="100%" height="100%"/>
 
 ---
 
