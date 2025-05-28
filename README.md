@@ -116,11 +116,11 @@ The extension is designed to be modular and scalable, with each accessibility fe
 
 **Note:** If doing **1A** for installation download both Git and Node.js. If doing **1B** only download Node.js
 
-- <a href="https://git-scm.com/downloads/win" target="_blank">Git</a> installed
+- [Git](https://git-scm.com/downloads/win) installed
   
   <img src="img/download-git.PNG" alt="Download Git Screenshot" width="80%" height="80%"/>
   
-- <a href="https://nodejs.org/en/download" target="_blank">Node.js</a> installed
+- [Node.js](https://nodejs.org/en/download) installed
   
   <img src="img/download-nodejs.PNG" alt="Download Node JS" width="80%" height="80%"/>
 
